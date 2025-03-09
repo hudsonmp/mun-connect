@@ -1,0 +1,68 @@
+services:
+  app:
+    image: node:18-alpine
+    container_name: nextjs_app
+    working_dir: /app
+    command: sh -c "npm install && npm run dev"
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      POSTGRES_URL: ${POSTGRES_URL}
+      POSTGRES_URL_NON_POOLING: ${POSTGRES_URL_NON_POOLING}
+      POSTGRES_PRISMA_URL: ${POSTGRES_PRISMA_URL}
+      NODE_ENV: ${NODE_ENV}
+    depends_on:
+      - supabase_db
+    volumes:
+      - ./:/app # Mount the entire mun-connect directory
+
+  supabase_db:
+    image: ${SUPABASE_IMAGE}
+    container_name: supabase_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DATABASE}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  mcp_server:
+    image: node:18-alpine
+    container_name: mcp_server
+    working_dir: /app
+    command: sh -c "npm install -g @modelcontextprotocol/server-postgres && npx @modelcontextprotocol/server-postgres \"${POSTGRES_URL}\" --api-key=\"${SUPABASE_SERVICE_ROLE_KEY}\" && tail -f /dev/null"
+    environment:
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      POSTGRES_URL: ${POSTGRES_URL}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DATABASE: ${POSTGRES_DATABASE}
+    volumes:
+      - ./:/app
+    depends_on:
+      - supabase_db
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - supabase_db
+
+volumes:
+  pg_data:
+  pgadmin_data:
