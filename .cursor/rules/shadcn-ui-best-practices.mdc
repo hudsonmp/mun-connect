@@ -1,0 +1,10 @@
+---
+name: shadcn-ui-best-practices.mdc
+description: Best practices for using Shadcn/UI components
+globs: **/*.{ts,tsx}
+---
+
+- Customize Shadcn/UI components using the provided customization props
+- Extend Shadcn/UI components with additional functionality when needed
+- Use Shadcn/UI's dark mode support for consistent theming
+- Implement responsive design using Shadcn/UI's built-in responsive utilities 

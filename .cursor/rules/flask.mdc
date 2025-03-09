@@ -1,0 +1,130 @@
+---
+description: Backend
+globs: *.py
+alwaysApply: false
+---
+# MUN Connect Backend Development Guide
+
+## Project Overview
+* AI-powered Model UN platform backend API
+* RESTful architecture with Flask
+* Support for document management, AI assistant features, and user authentication
+* Scalable design to handle conference and committee management
+
+## Backend Stack
+* **Framework**: Flask with Blueprints
+* **ORM**: Flask-SQLAlchemy
+* **Migrations**: Flask-Migrate
+* **Serialization**: Marshmallow
+* **Authentication**: Flask-JWT-Extended
+* **Validation**: Marshmallow, Flask-WTF
+* **AI Integration**: OpenAI/Anthropic API clients
+* **Caching**: Flask-Caching
+* **Background Tasks**: Celery (for long-running AI operations)
+
+## Coding Standards
+* Use type hints for all function signatures
+* Implement error handling at the beginning of functions with early returns
+* Organize code into blueprints by feature domain
+* Use descriptive variable names with auxiliary verbs
+* Place business logic in separate service modules
+* Follow PEP 8 style guidelines
+* Create proper docstrings for all public functions and classes
+* Use environment variables for configuration
+
+## API Implementation Strategy
+* Build feature by feature, aligned with frontend development
+* Implement endpoints in the following order:
+  * Authentication (register, login, refresh)
+  * User profiles and committees
+  * Document repository (CRUD operations)
+  * AI research assistant endpoints
+  * Speech writer and improvement API
+  * Conference management
+  * Networking features
+* Document all endpoints with OpenAPI/Swagger using Flask-RESTX
+* Create consistent response formats across all endpoints
+* Implement proper status codes and error responses
+
+## Blueprint Organization
+* Organize routes by feature domain:
+  * `auth/` - Authentication endpoints
+  * `documents/` - Document management
+  * `research/` - AI research assistant
+  * `speeches/` - Speech writer and analysis
+  * `conferences/` - Conference and committee management
+  * `users/` - User profiles and networking
+* Create index files for each blueprint
+* Register all blueprints in the application factory
+
+## Database Approach
+* Use Flask-SQLAlchemy models with proper relationships
+* Implement migration strategy with Flask-Migrate
+* Define clear table structures with appropriate indices
+* Use SQLAlchemy's relationship patterns for related data
+* Implement proper cascade behaviors for related records
+* Use connection pooling for better performance
+* Create database seeders for development environments
+
+## API Security
+* Implement JWT authentication with Flask-JWT-Extended
+* Create role-based access control for different user types
+* Use decorators to protect routes requiring authentication
+* Sanitize all input data to prevent injection attacks
+* Rate-limit API endpoints, especially AI-intensive operations
+* Protect against common API vulnerabilities (CSRF, XSS)
+* Store sensitive data (API keys) in environment variables
+
+## Error Handling
+* Create custom exception classes for different error types
+* Implement global error handlers for consistent responses
+* Log errors with appropriate severity levels
+* Return user-friendly error messages with proper status codes
+* Include error codes for frontend interpretation
+* Handle validation errors consistently across all endpoints
+* Provide detailed error information in development mode only
+
+## AI Integration
+* Create dedicated service modules for AI provider interactions
+* Implement rate limiting and quota management for AI API calls
+* Cache common AI responses to reduce API costs
+* Use async processing for time-consuming AI operations
+* Implement fallback mechanisms when AI services are unavailable
+* Structure prompts consistently for reliable AI responses
+* Monitor and log AI request volumes and response times
+
+## Performance Optimization
+* Implement proper database indexing for frequent queries
+* Use Flask-Caching for expensive operations and frequent requests
+* Optimize SQLAlchemy queries to minimize database load
+* Use pagination for endpoints returning large datasets
+* Implement database connection pooling
+* Use Celery for background processing of long-running tasks
+* Monitor and optimize N+1 query problems
+
+## Development Workflow
+* Create a feature branch for each API feature
+* Implement models first, then schemas, then routes
+* Write tests for new endpoints before implementation
+* Update API documentation as endpoints are developed
+* Test performance and scalability before finalizing
+* Use environment-specific configuration for development and production
+* Deploy backend features alongside their frontend counterparts
+
+## Testing Strategy
+* Write unit tests for service modules and utilities
+* Create integration tests for API endpoints using Flask test client
+* Implement test fixtures for database and application setup
+* Use factories to generate test data
+* Test edge cases and error scenarios
+* Verify security constraints and access control
+* Use mocks for external service dependencies (AI APIs)
+
+## Monitoring and Logging
+* Set up structured logging with appropriate log levels
+* Log all API requests and responses in development
+* Track performance metrics (response time, database queries)
+* Monitor AI API usage and costs
+* Set up alerting for critical errors and performance issues
+* Create health check endpoints for infrastructure monitoring
+* Implement request ID tracking across the application
