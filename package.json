@@ -4,8 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev --inspect",
-    "dev:dashboard": "next dev --inspect -p 3001",
-    "build": "next build",
+    "dev:dashboard": "DEPLOYMENT_TARGET=dashboard next dev --inspect -p 3001",
+    "setup": "node setup-build.js",
+    "build": "npm run setup && next build",
+    "build:dashboard": "DEPLOYMENT_TARGET=dashboard npm run setup && next build",
     "start": "next start",
     "lint": "next lint"
   },
