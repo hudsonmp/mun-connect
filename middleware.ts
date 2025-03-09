@@ -26,15 +26,6 @@ export async function middleware(request: NextRequest) {
   const res = NextResponse.next()
   const supabase = createMiddlewareClient({ req: request, res })
   
-  // Special handling for the root dashboard path to redirect to login if not authenticated
-  if (request.nextUrl.pathname === '/dashboard' || request.nextUrl.pathname === '/dashboard/') {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
-      return NextResponse.redirect(new URL('/dashboard/login', request.url))
-    }
-    return res
-  }
-  
   // Check if the pathname matches any protected route pattern
   const isProtectedRoute = protectedRoutes.some(route => 
     request.nextUrl.pathname.startsWith(route)

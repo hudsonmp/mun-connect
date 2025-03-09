@@ -3,42 +3,13 @@
 import React from "react"
 import Link from "next/link"
 import { useState } from "react"
-import { useAuth } from "../lib/auth-context"
 import { Button } from "../components/ui/button"
-import { Menu, X, LogOut } from "lucide-react"
+import { Menu, X } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useToast } from "../components/ui/use-toast"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "../components/ui/dropdown-menu"
-import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar"
 
 export function LandingHeader() {
-  const { user, signOut } = useAuth()
   const router = useRouter()
-  const { toast } = useToast()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
-
-  const handleSignOut = async () => {
-    try {
-      await signOut()
-      toast({
-        title: "Signed out",
-        description: "You have been signed out successfully.",
-      })
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to sign out. Please try again.",
-      })
-    }
-  }
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -92,61 +63,21 @@ export function LandingHeader() {
             Features
           </Link>
           
-          {user ? (
-            <div className="flex items-center gap-4">
-              <Button
-                variant="default"
-                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-                onClick={() => router.push('/dashboard')}
-              >
-                Dashboard
-              </Button>
-              
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                    <Avatar className="h-8 w-8 border-2 border-blue-200 dark:border-blue-800">
-                      <AvatarImage src="/placeholder.svg?height=32&width=32" alt="User" />
-                      <AvatarFallback>
-                        {user.email?.substring(0, 2).toUpperCase() || "UN"}
-                      </AvatarFallback>
-                    </Avatar>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => router.push("/dashboard/profile")}>
-                    Profile
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => router.push("/dashboard")}>
-                    Dashboard
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleSignOut}>
-                    <LogOut className="mr-2 h-4 w-4" />
-                    <span>Log out</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <Button 
-                variant="outline" 
-                onClick={() => router.push('/dashboard/login')}
-              >
-                Log in
-              </Button>
-              <Button
-                variant="default"
-                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-                onClick={() => router.push('/dashboard/register')}
-              >
-                Register
-              </Button>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => router.push('/dashboard/login')}
+            >
+              Log in
+            </Button>
+            <Button
+              variant="default"
+              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+              onClick={() => router.push('/dashboard/register')}
+            >
+              Register
+            </Button>
+          </div>
         </nav>
 
         {/* Mobile navigation */}
@@ -187,49 +118,20 @@ export function LandingHeader() {
                 Features
               </Link>
               
-              {user ? (
-                <>
-                  <Button
-                    variant="default"
-                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-                    onClick={() => router.push('/dashboard')}
-                  >
-                    Dashboard
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => router.push('/dashboard/profile')}
-                  >
-                    Profile
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className="w-full flex items-center justify-center"
-                    onClick={handleSignOut}
-                  >
-                    <LogOut className="mr-2 h-4 w-4" />
-                    <span>Log out</span>
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => router.push('/dashboard/login')}
-                  >
-                    Log in
-                  </Button>
-                  <Button
-                    variant="default"
-                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-                    onClick={() => router.push('/dashboard/register')}
-                  >
-                    Register
-                  </Button>
-                </>
-              )}
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => router.push('/dashboard/login')}
+              >
+                Log in
+              </Button>
+              <Button
+                variant="default"
+                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                onClick={() => router.push('/dashboard/register')}
+              >
+                Register
+              </Button>
             </div>
           </div>
         )}
