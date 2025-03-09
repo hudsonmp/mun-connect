@@ -1,86 +1,87 @@
-import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { cookies } from 'next/headers'
+import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
 
-export async function middleware(req: NextRequest) {
+// Define protected route patterns
+const protectedRoutes = [
+  '/dashboard',
+  '/documents',
+  '/research',
+  '/speeches',
+  '/conferences',
+  '/profile',
+]
+
+// Define authentication exempt routes
+const authRoutes = [
+  '/login',
+  '/register',
+  '/profile-setup',
+  '/forgot-password',
+  '/reset-password',
+]
+
+export async function middleware(request: NextRequest) {
   const res = NextResponse.next()
+  const supabase = createMiddlewareClient({ req: request, res })
   
-  // Create a Supabase client
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return req.cookies.get(name)?.value
-        },
-        set(name: string, value: string, options: any) {
-          req.cookies.set({
-            name,
-            value,
-            ...options,
-          })
-          res.cookies.set({
-            name,
-            value,
-            ...options,
-          })
-        },
-        remove(name: string, options: any) {
-          req.cookies.set({
-            name,
-            value: '',
-            ...options,
-          })
-          res.cookies.set({
-            name,
-            value: '',
-            ...options,
-          })
-        },
-      },
-    }
+  // Check if the pathname matches any protected route pattern
+  const isProtectedRoute = protectedRoutes.some(route => 
+    request.nextUrl.pathname.startsWith(route)
   )
   
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-
-  // Check if the user is authenticated
-  const isAuthenticated = !!session
-
-  // Define protected routes that require authentication
-  const isProtectedRoute = req.nextUrl.pathname.startsWith('/dashboard') || 
-                          req.nextUrl.pathname === '/profile' ||
-                          req.nextUrl.pathname === '/profile-setup'
-
-  // Define auth routes that should redirect to dashboard if already authenticated
-  const isAuthRoute = req.nextUrl.pathname === '/login' || 
-                     req.nextUrl.pathname === '/register'
-
-  // Redirect unauthenticated users from protected routes to login
-  if (isProtectedRoute && !isAuthenticated) {
-    const redirectUrl = new URL('/login', req.url)
-    redirectUrl.searchParams.set('redirect', req.nextUrl.pathname)
-    return NextResponse.redirect(redirectUrl)
+  // Check if the pathname is an auth route
+  const isAuthRoute = authRoutes.some(route => 
+    request.nextUrl.pathname.startsWith(route)
+  )
+  
+  // We don't need to check non-protected and non-auth routes
+  if (!isProtectedRoute && !isAuthRoute) {
+    return res
   }
-
-  // Redirect authenticated users from auth routes to dashboard
-  if (isAuthRoute && isAuthenticated) {
-    return NextResponse.redirect(new URL('/dashboard', req.url))
+  
+  // Get the session - check if user is authenticated
+  const { data: { session } } = await supabase.auth.getSession()
+  
+  // Handle auth routes (login, register, etc.)
+  if (isAuthRoute) {
+    // If authenticated and trying to access auth routes, redirect to dashboard
+    if (session) {
+      return NextResponse.redirect(new URL('/dashboard', request.url))
+    }
+    // Otherwise, allow access to auth routes
+    return res
   }
-
+  
+  // Handle protected routes
+  if (isProtectedRoute) {
+    // If not authenticated, redirect to login with the current URL as redirect
+    if (!session) {
+      const redirectUrl = new URL('/login', request.url)
+      redirectUrl.searchParams.set('redirect', request.nextUrl.pathname)
+      return NextResponse.redirect(redirectUrl)
+    }
+    
+    // If authenticated, allow access to protected routes
+    return res
+  }
+  
   return res
 }
 
-// Define which routes this middleware should run on
+// Configure middleware to match specific paths
 export const config = {
   matcher: [
     '/dashboard/:path*',
-    '/profile',
-    '/profile-setup',
+    '/documents/:path*',
+    '/research/:path*',
+    '/speeches/:path*',
+    '/conferences/:path*',
+    '/profile/:path*',
     '/login',
     '/register',
+    '/profile-setup',
+    '/forgot-password',
+    '/reset-password',
   ],
 } 

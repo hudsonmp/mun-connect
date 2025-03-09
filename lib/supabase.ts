@@ -10,6 +10,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    storageKey: 'supabase-auth',
   },
 })
 
@@ -20,6 +22,14 @@ if (typeof window !== 'undefined') {
     if (data && data.session) {
       // Session exists, but let the auth context handle redirects
       console.log('Session initialized')
+    }
+  })
+
+  // Set up error handling for network/storage issues
+  window.addEventListener('storage', (event) => {
+    if (event.key === 'supabase-auth') {
+      // Refresh the page to ensure auth state is consistent
+      window.location.reload()
     }
   })
 }
