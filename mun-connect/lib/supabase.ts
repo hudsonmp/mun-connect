@@ -13,15 +13,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 })
 
-// Set callback URL for Supabase auth
+// Initialize session if in browser environment
 if (typeof window !== 'undefined') {
-  supabase.auth.setSession({
-    access_token: '',
-    refresh_token: '',
-  })
-  supabase.auth.onAuthStateChange((event) => {
-    if (event === 'SIGNED_IN') {
-      window.location.href = '/dashboard'
+  // This ensures the session is properly initialized
+  supabase.auth.getSession().then(({ data }) => {
+    if (data && data.session) {
+      // Session exists, but let the auth context handle redirects
+      console.log('Session initialized')
     }
   })
 }

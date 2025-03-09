@@ -1,10 +1,25 @@
+"use client"
+
 import Link from "next/link"
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { useAuth } from "@/lib/auth-context"
 
 export default function AuthLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const { user, isLoading } = useAuth()
+  const router = useRouter()
+
+  // Redirect to dashboard if already authenticated
+  useEffect(() => {
+    if (!isLoading && user) {
+      router.push('/dashboard')
+    }
+  }, [user, isLoading, router])
+
   return (
     <div className="min-h-screen bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950">
       <div className="container mx-auto px-4 py-6">

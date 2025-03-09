@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -25,10 +25,19 @@ const formSchema = z.object({
 })
 
 export default function LoginPage() {
-  const { signIn } = useAuth()
+  const { signIn, user, isLoading } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirectPath = searchParams.get('redirect') || '/dashboard'
   const { toast } = useToast()
-  const [isLoading, setIsLoading] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // If already authenticated, redirect to the specified path
+  useEffect(() => {
+    if (!isLoading && user) {
+      router.push(redirectPath)
+    }
+  }, [user, isLoading, router, redirectPath])
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -39,7 +48,7 @@ export default function LoginPage() {
   })
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    setIsLoading(true)
+    setIsSubmitting(true)
     try {
       const { error } = await signIn(values.email, values.password)
       
@@ -57,7 +66,8 @@ export default function LoginPage() {
         description: "Welcome back to MUN Connect!",
       })
       
-      router.push("/dashboard")
+      // Redirect to the specified path or dashboard
+      router.push(redirectPath)
     } catch (error) {
       toast({
         variant: "destructive",
@@ -65,7 +75,7 @@ export default function LoginPage() {
         description: "Please try again later.",
       })
     } finally {
-      setIsLoading(false)
+      setIsSubmitting(false)
     }
   }
 
@@ -122,9 +132,9 @@ export default function LoginPage() {
             <Button 
               type="submit" 
               className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-              disabled={isLoading}
+              disabled={isSubmitting}
             >
-              {isLoading ? "Signing in..." : "Sign in"}
+              {isSubmitting ? "Signing in..." : "Sign in"}
             </Button>
           </form>
         </Form>

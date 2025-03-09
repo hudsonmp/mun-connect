@@ -24,6 +24,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isProfileComplete, setIsProfileComplete] = useState(false)
   const router = useRouter()
 
+  // Helper function to check if a path is an auth path
+  const isAuthPath = (path: string) => {
+    return path.includes('/login') || path.includes('/register') || path.includes('/profile-setup')
+  }
+
   useEffect(() => {
     const getSession = async () => {
       const { data: { session } } = await supabase.auth.getSession()
@@ -39,11 +44,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .single()
         
         setIsProfileComplete(!!data?.username)
-        
-        // If we're on the landing page and user is authenticated, redirect to dashboard
-        if (typeof window !== 'undefined' && window.location.pathname === '/') {
-          router.push('/dashboard')
-        }
       }
       
       setIsLoading(false)
@@ -55,7 +55,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       (event, session) => {
         setSession(session)
         setUser(session?.user ?? null)
-        setIsLoading(false)
         
         // Handle auth state changes
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
@@ -68,19 +67,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               .single()
               .then(({ data }) => {
                 setIsProfileComplete(!!data?.username)
-                
-                // If user just signed in and is on landing page, redirect to dashboard
-                if (typeof window !== 'undefined' && window.location.pathname === '/') {
-                  router.push('/dashboard')
-                }
               })
           }
-        } else if (event === 'SIGNED_OUT') {
-          // If user signed out, redirect to landing page
-          if (typeof window !== 'undefined' && window.location.pathname.includes('/dashboard')) {
-            router.push('/')
-          }
         }
+        
+        setIsLoading(false)
       }
     )
 

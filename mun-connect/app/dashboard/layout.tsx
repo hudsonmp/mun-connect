@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar"
@@ -14,24 +14,34 @@ export default function DashboardLayout({
 }>) {
   const { user, isLoading, isProfileComplete } = useAuth()
   const router = useRouter()
+  const [redirecting, setRedirecting] = useState(false)
 
   // Redirect to login if not authenticated or to profile setup if profile is not complete
   useEffect(() => {
     if (!isLoading) {
-      if (!user) {
-        router.push('/login')
-      } else if (!isProfileComplete) {
-        router.push('/profile-setup')
+      if (!user && !redirecting) {
+        setRedirecting(true)
+        // Add a small delay to prevent potential race conditions
+        setTimeout(() => {
+          router.push('/login?redirect=/dashboard')
+        }, 100)
+      } else if (user && !isProfileComplete && !redirecting) {
+        setRedirecting(true)
+        setTimeout(() => {
+          router.push('/profile-setup')
+        }, 100)
       }
     }
-  }, [user, isLoading, isProfileComplete, router])
+  }, [user, isLoading, isProfileComplete, router, redirecting])
 
-  if (isLoading) {
+  if (isLoading || redirecting) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50/50 via-indigo-50/30 to-white dark:from-blue-950/20 dark:via-indigo-950/10 dark:to-background">
         <div className="flex flex-col items-center">
           <Loader2 className="h-12 w-12 animate-spin text-blue-600 mb-4" />
-          <p className="text-blue-600 font-medium">Loading...</p>
+          <p className="text-blue-600 font-medium">
+            {redirecting ? "Redirecting..." : "Loading..."}
+          </p>
         </div>
       </div>
     )
