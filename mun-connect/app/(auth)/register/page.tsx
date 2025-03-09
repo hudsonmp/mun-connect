@@ -46,7 +46,7 @@ export default function RegisterPage() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true)
     try {
-      const { error } = await signUp(values.email, values.password)
+      const { error, data } = await signUp(values.email, values.password)
       
       if (error) {
         toast({
@@ -59,11 +59,11 @@ export default function RegisterPage() {
       
       toast({
         title: "Registration successful",
-        description: "Please check your email to confirm your account, then complete your profile.",
+        description: "A confirmation email has been sent. You can start using the dashboard right away.",
       })
       
-      // Redirect to profile setup
-      router.push("/profile-setup")
+      // Immediately redirect to dashboard - they can confirm email later
+      router.push("/dashboard")
     } catch (error) {
       toast({
         variant: "destructive",

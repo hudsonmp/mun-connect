@@ -93,14 +93,13 @@ export function LandingHeader() {
           
           {user ? (
             <div className="flex items-center gap-4">
-              <Link href="/dashboard">
-                <Button
-                  variant="default"
-                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-                >
-                  Dashboard
-                </Button>
-              </Link>
+              <Button
+                variant="default"
+                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                onClick={() => router.push('/dashboard')}
+              >
+                Dashboard
+              </Button>
               
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -189,14 +188,13 @@ export function LandingHeader() {
               
               {user ? (
                 <>
-                  <Link href="/dashboard">
-                    <Button
-                      variant="default"
-                      className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-                    >
-                      Dashboard
-                    </Button>
-                  </Link>
+                  <Button
+                    variant="default"
+                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                    onClick={() => router.push('/dashboard')}
+                  >
+                    Dashboard
+                  </Button>
                   <Link href="/profile">
                     <Button
                       variant="outline"

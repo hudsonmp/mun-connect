@@ -39,6 +39,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .single()
         
         setIsProfileComplete(!!data?.username)
+        
+        // If we're on the landing page and user is authenticated, redirect to dashboard
+        if (typeof window !== 'undefined' && window.location.pathname === '/') {
+          router.push('/dashboard')
+        }
       }
       
       setIsLoading(false)
@@ -47,21 +52,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     getSession()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
         setSession(session)
         setUser(session?.user ?? null)
         setIsLoading(false)
         
-        // Check profile completion on auth state change
-        if (session?.user) {
-          supabase
-            .from('profiles')
-            .select('username')
-            .eq('id', session.user.id)
-            .single()
-            .then(({ data }) => {
-              setIsProfileComplete(!!data?.username)
-            })
+        // Handle auth state changes
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          // Get profile information
+          if (session?.user) {
+            supabase
+              .from('profiles')
+              .select('username')
+              .eq('id', session.user.id)
+              .single()
+              .then(({ data }) => {
+                setIsProfileComplete(!!data?.username)
+                
+                // If user just signed in and is on landing page, redirect to dashboard
+                if (typeof window !== 'undefined' && window.location.pathname === '/') {
+                  router.push('/dashboard')
+                }
+              })
+          }
+        } else if (event === 'SIGNED_OUT') {
+          // If user signed out, redirect to landing page
+          if (typeof window !== 'undefined' && window.location.pathname.includes('/dashboard')) {
+            router.push('/')
+          }
         }
       }
     )
