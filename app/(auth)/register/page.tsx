@@ -6,8 +6,8 @@ import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { useAuth } from "@/lib/auth-context"
-import { Button } from "@/components/ui/button"
+import { useAuth } from "../../../lib/auth-context"
+import { Button } from "../../../components/ui/button"
 import {
   Form,
   FormControl,
@@ -15,9 +15,9 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
-import { useToast } from "@/components/ui/use-toast"
+} from "../../../components/ui/form"
+import { Input } from "../../../components/ui/input"
+import { useToast } from "../../../components/ui/use-toast"
 
 const formSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address" }),

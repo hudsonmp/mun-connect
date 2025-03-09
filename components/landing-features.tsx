@@ -3,8 +3,8 @@
 import { useState } from "react"
 import { motion } from "framer-motion"
 import { PenTool, BookOpen, Users, Globe, MessageSquare, FileText, Sparkles, Zap, ArrowRight, ExternalLink } from "lucide-react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "./ui/card"
+import { Button } from "./ui/button"
 import Link from "next/link"
 
 const features = [

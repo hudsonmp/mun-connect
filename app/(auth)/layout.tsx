@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { useAuth } from "@/lib/auth-context"
+import { useAuth } from "../../lib/auth-context"
 
 export default function AuthLayout({
   children,

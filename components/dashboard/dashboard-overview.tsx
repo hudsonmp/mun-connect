@@ -1,10 +1,10 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "../../components/ui/card"
+import { Button } from "../../components/ui/button"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs"
+import { Badge } from "../../components/ui/badge"
 import { Calendar, FileText, MessageSquare, Users } from "lucide-react"
 
 // Sample data

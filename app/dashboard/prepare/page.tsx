@@ -1,5 +1,5 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../../components/ui/card"
+import { Button } from "../../../components/ui/button"
 import { BookOpen, Search, FileText, Presentation, Brain } from "lucide-react"
 
 // Sub-features for the Prepare/Research section

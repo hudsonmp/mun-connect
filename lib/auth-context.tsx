@@ -94,17 +94,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         if (session?.user) {
           // Check if profile is complete
-          const { data, error } = await supabase
-            .from('profiles')
-            .select('username')
-            .eq('id', session.user.id)
-            .single()
-          
-          if (error) {
-            console.error('Error fetching profile:', error)
+          try {
+            const { data, error } = await supabase
+              .from('profiles')
+              .select('username')
+              .eq('id', session.user.id)
+              .single()
+            
+            if (error) {
+              console.error('Error fetching profile:', JSON.stringify(error))
+              
+              // Check if the error is because the profile doesn't exist
+              if (error.code === 'PGRST116') {
+                // Create a default profile
+                const { error: createError } = await supabase
+                  .from('profiles')
+                  .upsert({
+                    id: session.user.id,
+                    username: `user_${Math.random().toString(36).substring(2, 10)}`,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                  })
+                
+                if (createError) {
+                  console.error('Error creating profile:', JSON.stringify(createError))
+                } else {
+                  setIsProfileComplete(false)
+                }
+              }
+            } else {
+              setIsProfileComplete(!!data?.username)
+            }
+          } catch (error) {
+            console.error('Exception in profile fetch:', error)
           }
-          
-          setIsProfileComplete(!!data?.username)
           
           // Set up a timer to refresh the session before it expires
           if (session.expires_at) {
@@ -145,12 +168,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 .single()
               
               if (error) {
-                console.error('Error fetching profile on auth change:', error)
+                console.error('Error fetching profile on auth change:', JSON.stringify(error))
+                
+                // Check if the error is because the profile doesn't exist
+                if (error.code === 'PGRST116') {
+                  // Create a default profile
+                  const { error: createError } = await supabase
+                    .from('profiles')
+                    .upsert({
+                      id: session.user.id,
+                      username: `user_${Math.random().toString(36).substring(2, 10)}`,
+                      created_at: new Date().toISOString(),
+                      updated_at: new Date().toISOString(),
+                    })
+                  
+                  if (createError) {
+                    console.error('Error creating profile on auth change:', JSON.stringify(createError))
+                  } else {
+                    setIsProfileComplete(false)
+                  }
+                }
+              } else {
+                setIsProfileComplete(!!data?.username)
               }
-              
-              setIsProfileComplete(!!data?.username)
             } catch (error) {
-              console.error('Error in auth change profile fetch:', error)
+              console.error('Exception in auth change profile fetch:', error)
             }
           }
         } else if (event === 'SIGNED_OUT') {

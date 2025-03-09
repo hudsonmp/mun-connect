@@ -4,11 +4,11 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { PenTool, BookOpen, Users, Globe, User } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { useAuth } from "@/lib/auth-context"
-import { supabase } from "@/lib/supabase"
-import { Button } from "@/components/ui/button"
+import { cn } from "../../lib/utils"
+import { Avatar, AvatarFallback, AvatarImage } from "../../components/ui/avatar"
+import { useAuth } from "../../lib/auth-context"
+import { supabase } from "../../lib/supabase"
+import { Button } from "../../components/ui/button"
 
 // Define the feature categories
 const featureCategories = [

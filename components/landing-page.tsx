@@ -1,9 +1,9 @@
-import { LandingHeader } from "@/components/landing-header"
-import { LandingHero } from "@/components/landing-hero"
-import { LandingFeatures } from "@/components/landing-features"
-import { LandingTestimonials } from "@/components/landing-testimonials"
-import { LandingCTA } from "@/components/landing-cta"
-import { LandingFooter } from "@/components/landing-footer"
+import { LandingHeader } from "./landing-header"
+import { LandingHero } from "./landing-hero"
+import { LandingFeatures } from "./landing-features"
+import { LandingTestimonials } from "./landing-testimonials"
+import { LandingCTA } from "./landing-cta"
+import { LandingFooter } from "./landing-footer"
 
 export function LandingPage() {
   return (

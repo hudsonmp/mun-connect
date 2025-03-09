@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { useAuth } from "@/lib/auth-context"
-import { supabase } from "@/lib/supabase"
-import { Button } from "@/components/ui/button"
+import { useAuth } from "../../../lib/auth-context"
+import { supabase } from "../../../lib/supabase"
+import { Button } from "../../../components/ui/button"
 import {
   Form,
   FormControl,
@@ -16,17 +16,17 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { useToast } from "@/components/ui/use-toast"
+} from "../../../components/ui/form"
+import { Input } from "../../../components/ui/input"
+import { Textarea } from "../../../components/ui/textarea"
+import { useToast } from "../../../components/ui/use-toast"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
+} from "../../../components/ui/select"
 import {
   Card,
   CardContent,
@@ -34,7 +34,7 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"
+} from "../../../components/ui/card"
 import { CheckCircle, ChevronRight, Loader2 } from "lucide-react"
 
 const formSchema = z.object({

@@ -4,10 +4,10 @@ import type React from "react"
 
 import { useState } from "react"
 import { motion } from "framer-motion"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { toast } from "@/components/ui/use-toast"
-import { Toaster } from "@/components/ui/toaster"
+import { Button } from "./ui/button"
+import { Input } from "./ui/input"
+import { toast } from "./ui/use-toast"
+import { Toaster } from "./ui/toaster"
 
 export function LandingHero() {
   const [email, setEmail] = useState("")
