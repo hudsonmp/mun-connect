@@ -1,6 +1,6 @@
 "use client"
 
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react'
 import { supabase } from './supabase'
 import { Session, User } from '@supabase/supabase-js'
 import { useRouter, usePathname } from 'next/navigation'
@@ -28,12 +28,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname()
 
   // Helper function to check if a path is an auth path
-  const isAuthPath = (path: string) => {
+  const isAuthPath = useCallback((path: string) => {
     return path.includes('/login') || path.includes('/register') || path.includes('/profile-setup')
-  }
+  }, []);
 
   // Function to refresh the session
-  const refreshSession = async () => {
+  const refreshSession = useCallback(async () => {
     try {
       const { data, error } = await supabase.auth.refreshSession()
       if (error) {
@@ -49,7 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Error in refreshSession:', error)
     }
-  }
+  }, [router, pathname, isAuthPath])
 
   // Function to update user profile
   const updateProfile = async (profileData: any) => {
@@ -209,7 +209,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       subscription.unsubscribe()
     }
-  }, [router, pathname])
+  }, [router, pathname, refreshSession, isAuthPath])
 
   const signUp = async (email: string, password: string) => {
     try {

@@ -1,3 +1,4 @@
+import React from "react"
 import { LandingHeader } from "./landing-header"
 import { LandingHero } from "./landing-hero"
 import { LandingFeatures } from "./landing-features"

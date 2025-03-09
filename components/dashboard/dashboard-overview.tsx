@@ -1,5 +1,6 @@
 "use client"
 
+import React from "react"
 import { motion } from "framer-motion"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "../../components/ui/card"
 import { Button } from "../../components/ui/button"
@@ -76,7 +77,7 @@ export function DashboardOverview() {
     <div className="space-y-8">
       <div className="flex flex-col space-y-2">
         <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-        <p className="text-muted-foreground">Welcome back! Here's an overview of your MUN activities.</p>
+        <p className="text-muted-foreground">Welcome back! Here&apos;s an overview of your MUN activities.</p>
       </div>
 
       <Tabs defaultValue="upcoming" className="space-y-4">

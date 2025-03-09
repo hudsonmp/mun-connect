@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import React, { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -401,7 +401,7 @@ export default function ProfilePage() {
                   <div className="space-y-3">
                     <FormLabel>Interests</FormLabel>
                     <FormDescription>
-                      Select topics you're interested in
+                      Select topics you&apos;re interested in
                     </FormDescription>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       {INTERESTS.map((interest) => (
@@ -428,7 +428,7 @@ export default function ProfilePage() {
                   <div className="space-y-3">
                     <FormLabel>Conference Experience</FormLabel>
                     <FormDescription>
-                      Add conferences you've attended
+                      Add conferences you&apos;ve attended
                     </FormDescription>
                     
                     <div className="flex gap-2">

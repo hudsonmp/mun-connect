@@ -1,5 +1,6 @@
 "use client"
 
+import React from "react"
 import { motion } from "framer-motion"
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar"
 import { Card, CardContent } from "./ui/card"
@@ -48,7 +49,7 @@ export function LandingTestimonials() {
               <Card className="h-full">
                 <CardContent className="p-6">
                   <div className="flex flex-col h-full">
-                    <blockquote className="flex-1 mb-6 text-lg italic">"{testimonial.quote}"</blockquote>
+                    <blockquote className="flex-1 mb-6 text-lg italic">&quot;{testimonial.quote}&quot;</blockquote>
                     <div className="flex items-center">
                       <Avatar className="h-10 w-10 mr-3">
                         <AvatarImage src={testimonial.avatar} alt={testimonial.name} />

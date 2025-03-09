@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import React, { useState } from "react"
 import { motion } from "framer-motion"
 import { PenTool, BookOpen, Users, Globe, MessageSquare, FileText, Sparkles, Zap, ArrowRight, ExternalLink } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "./ui/card"

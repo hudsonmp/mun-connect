@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import React, { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -324,7 +324,7 @@ export default function ProfileSetupPage() {
                     <FormItem>
                       <FormLabel>Interests (Optional)</FormLabel>
                       <FormDescription>
-                        Select topics you're interested in
+                        Select topics you&apos;re interested in
                       </FormDescription>
                       <div className="grid grid-cols-2 gap-2 mt-3">
                         {INTERESTS.map((interest) => (

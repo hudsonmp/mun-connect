@@ -1,8 +1,6 @@
 "use client"
 
-import type React from "react"
-
-import { useState } from "react"
+import React, { useState } from "react"
 import { motion } from "framer-motion"
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
@@ -74,3 +72,4 @@ export function LandingCTA() {
   )
 }
 
+// Features data
