@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useForm } from "react-hook-form"
@@ -18,13 +18,15 @@ import {
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/use-toast"
+import { Loader2 } from "lucide-react"
 
 const formSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address" }),
   password: z.string().min(6, { message: "Password must be at least 6 characters" }),
 })
 
-export default function LoginPage() {
+// Component that uses searchParams
+function LoginForm() {
   const { signIn, user, isLoading } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -152,5 +154,26 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+// Loading fallback
+function LoginLoading() {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 p-4">
+      <div className="flex flex-col items-center">
+        <Loader2 className="h-12 w-12 animate-spin text-blue-600 mb-4" />
+        <p className="text-blue-600 font-medium">Loading...</p>
+      </div>
+    </div>
+  )
+}
+
+// Main page component with Suspense
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginLoading />}>
+      <LoginForm />
+    </Suspense>
   )
 } 
