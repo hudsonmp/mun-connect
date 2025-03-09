@@ -50,7 +50,7 @@ export default function DashboardPage() {
       <div>
         <h1 className="text-3xl font-bold">Welcome, {user?.email?.split('@')[0] || 'Delegate'}!</h1>
         <p className="text-muted-foreground mt-2">
-          Get started with MUN Connect's AI-powered tools
+          Get started with MUN Connect&apos;s AI-powered tools
         </p>
       </div>
 
