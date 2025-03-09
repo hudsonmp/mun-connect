@@ -1,36 +1,112 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# MUN Connect - Docker & Supabase Setup
 
-## Getting Started
+A Next.js application for Model United Nations conferences with Supabase backend integration.
 
-First, run the development server:
+## 📋 Prerequisites
+
+- Docker and Docker Compose
+- Node.js 18 or higher (for local development)
+- Git
+
+## 🚀 Getting Started
+
+### Clone the Repository
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone <your-repository-url>
+cd mun-connect
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Environment Setup
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+The project uses Docker containers with Supabase for the database. All environment variables are stored in the `.env` file.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Starting the Application
 
-## Learn More
+```bash
+# Start all containers in detached mode
+docker-compose up -d
+```
 
-To learn more about Next.js, take a look at the following resources:
+This command will start:
+- Next.js application on http://localhost:3000
+- Supabase PostgreSQL database
+- MCP Server for database operations
+- pgAdmin for database management on http://localhost:5050
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Accessing pgAdmin
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Navigate to http://localhost:5050 in your browser
+2. Log in with:
+   - Email: admin@example.com
+   - Password: pgadmin
+3. To connect to the Supabase database:
+   - Right-click on Servers → Create → Server
+   - Name: Supabase Local
+   - Connection tab:
+     - Host: supabase_postgres
+     - Port: 5432
+     - Username: postgres
+     - Password: (from .env file)
 
-## Deploy on Vercel
+## 🛠️ Database Management
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Initialize the Database
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+We've included a script to initialize the database with sample data:
+
+```bash
+./init-db.sh
+```
+
+### Run SQL Queries
+
+You can run SQL queries against the database using:
+
+```bash
+./run-sql.sh "SELECT * FROM committees;"
+```
+
+## 🧪 Testing the Supabase Connection
+
+To test your Supabase connection, run:
+
+```bash
+# Install dependencies if needed
+npm install dotenv @supabase/supabase-js
+
+# Run the test script
+node supabase-test.js
+```
+
+## 🗄️ Data Schema
+
+The sample database includes:
+
+- **Committees**: Conference committees
+- **Delegates**: Participants assigned to committees
+- **Resolutions**: Documents created by committees
+
+## 🛑 Stopping the Application
+
+```bash
+docker-compose down
+```
+
+To remove volumes (all data will be lost):
+
+```bash
+docker-compose down -v
+```
+
+## 🔄 Troubleshooting
+
+1. **Connection Issues**: Ensure all containers are running with `docker ps`
+2. **Database Access**: Check credentials in the `.env` file
+3. **Container Logs**: View logs with `docker logs <container_name>`
+
+## 📚 Additional Resources
+
+- [Supabase Documentation](https://supabase.io/docs)
+- [Next.js Documentation](https://nextjs.org/docs)
+- [Docker Documentation](https://docs.docker.com)

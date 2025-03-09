@@ -12,7 +12,7 @@ export default function DashboardLayout({
       <DashboardHeader />
       <div className="flex-1 flex">
         <DashboardSidebar />
-        <main className="flex-1 transition-all duration-300 ease-in-out ml-16 p-6 bg-gradient-to-br from-blue-50/50 via-indigo-50/30 to-white dark:from-blue-950/20 dark:via-indigo-950/10 dark:to-background">
+        <main className="flex-1 transition-all duration-300 ease-in-out ml-16 dashboard-main p-6 bg-gradient-to-br from-blue-50/50 via-indigo-50/30 to-white dark:from-blue-950/20 dark:via-indigo-950/10 dark:to-background">
           {children}
         </main>
       </div>
