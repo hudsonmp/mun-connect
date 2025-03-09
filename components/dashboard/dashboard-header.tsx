@@ -1,10 +1,11 @@
 "use client"
 
+import React from "react"
 import Link from "next/link"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { useAuth } from "@/lib/auth-context"
-import { Button } from "@/components/ui/button"
+import { useAuth } from "../../lib/auth-context"
+import { Button } from "../../components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,10 +13,10 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+} from "../../components/ui/dropdown-menu"
+import { Avatar, AvatarFallback, AvatarImage } from "../../components/ui/avatar"
 import { Bell, Settings, User, Home, LogOut } from "lucide-react"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "../../components/ui/use-toast"
 
 export function DashboardHeader() {
   const { user, signOut, isProfileComplete } = useAuth()
@@ -117,11 +118,11 @@ export function DashboardHeader() {
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>My Account</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => router.push("/profile")}>
+                <DropdownMenuItem onClick={() => router.push("/dashboard/profile")}>
                   <User className="mr-2 h-4 w-4" />
                   <span>Profile</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => router.push("/settings")}>
+                <DropdownMenuItem onClick={() => router.push("/dashboard/settings")}>
                   <Settings className="mr-2 h-4 w-4" />
                   <span>Settings</span>
                 </DropdownMenuItem>
@@ -137,14 +138,14 @@ export function DashboardHeader() {
               <Button 
                 variant="outline" 
                 size="sm"
-                onClick={() => router.push("/login")}
+                onClick={() => router.push("/dashboard/login")}
                 className="border-blue-200 dark:border-blue-800"
               >
                 Log in
               </Button>
               <Button 
                 size="sm"
-                onClick={() => router.push("/register")}
+                onClick={() => router.push("/dashboard/register")}
                 className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
               >
                 Register

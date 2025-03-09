@@ -1,12 +1,13 @@
 "use client"
 
+import React from "react"
 import Link from "next/link"
 import { useState } from "react"
-import { useAuth } from "@/lib/auth-context"
-import { Button } from "@/components/ui/button"
+import { useAuth } from "../lib/auth-context"
+import { Button } from "../components/ui/button"
 import { Menu, X, LogOut } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "../components/ui/use-toast"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,8 +15,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+} from "../components/ui/dropdown-menu"
+import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar"
 
 export function LandingHeader() {
   const { user, signOut } = useAuth()
@@ -115,7 +116,7 @@ export function LandingHeader() {
                 <DropdownMenuContent align="end">
                   <DropdownMenuLabel>My Account</DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => router.push("/profile")}>
+                  <DropdownMenuItem onClick={() => router.push("/dashboard/profile")}>
                     Profile
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => router.push("/dashboard")}>
@@ -131,19 +132,19 @@ export function LandingHeader() {
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <Link href="/login">
-                <Button variant="outline">
-                  Log in
-                </Button>
-              </Link>
-              <Link href="/register">
-                <Button
-                  variant="default"
-                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-                >
-                  Register
-                </Button>
-              </Link>
+              <Button 
+                variant="outline" 
+                onClick={() => router.push('/dashboard/login')}
+              >
+                Log in
+              </Button>
+              <Button
+                variant="default"
+                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                onClick={() => router.push('/dashboard/register')}
+              >
+                Register
+              </Button>
             </div>
           )}
         </nav>
@@ -195,14 +196,13 @@ export function LandingHeader() {
                   >
                     Dashboard
                   </Button>
-                  <Link href="/profile">
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                    >
-                      Profile
-                    </Button>
-                  </Link>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => router.push('/dashboard/profile')}
+                  >
+                    Profile
+                  </Button>
                   <Button
                     variant="ghost"
                     className="w-full flex items-center justify-center"
@@ -214,22 +214,20 @@ export function LandingHeader() {
                 </>
               ) : (
                 <>
-                  <Link href="/login">
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                    >
-                      Log in
-                    </Button>
-                  </Link>
-                  <Link href="/register">
-                    <Button
-                      variant="default"
-                      className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-                    >
-                      Register
-                    </Button>
-                  </Link>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => router.push('/dashboard/login')}
+                  >
+                    Log in
+                  </Button>
+                  <Button
+                    variant="default"
+                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                    onClick={() => router.push('/dashboard/register')}
+                  >
+                    Register
+                  </Button>
                 </>
               )}
             </div>

@@ -1,15 +1,25 @@
 "use client"
 
 import React from "react"
-import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar"
-import { DashboardHeader } from "@/components/dashboard/dashboard-header"
-import { ProtectedRoute } from "@/components/auth/protected-route"
-
+import { usePathname } from "next/navigation"
+import { DashboardSidebar } from "../../components/dashboard/dashboard-sidebar"
+import { DashboardHeader } from "../../components/dashboard/dashboard-header"
+import { ProtectedRoute } from "../../components/auth/protected-route"
+  
 export default function DashboardLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const pathname = usePathname()
+  
+  // Don't apply protection to login and register pages
+  const isAuthRoute = pathname === '/dashboard/login' || pathname === '/dashboard/register'
+  
+  if (isAuthRoute) {
+    return <>{children}</>
+  }
+  
   return (
     <ProtectedRoute requireProfileComplete={true}>
       <div className="min-h-screen flex flex-col">

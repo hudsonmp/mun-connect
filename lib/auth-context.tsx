@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { supabase } from './supabase'
 import { Session, User } from '@supabase/supabase-js'
 import { useRouter, usePathname } from 'next/navigation'
@@ -14,6 +14,7 @@ type AuthContextType = {
   signOut: () => Promise<void>
   isProfileComplete: boolean
   refreshSession: () => Promise<void>
+  updateProfile: (profileData: any) => Promise<{ error: any; data: any }>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -39,7 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error('Error refreshing session:', error)
         // If refresh fails, redirect to login
         if (!isAuthPath(pathname || '')) {
-          router.push('/login')
+          router.push('/dashboard/login')
         }
       } else if (data.session) {
         setSession(data.session)
@@ -47,6 +48,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       console.error('Error in refreshSession:', error)
+    }
+  }
+
+  // Function to update user profile
+  const updateProfile = async (profileData: any) => {
+    try {
+      if (!user) {
+        return { error: { message: 'No user logged in' }, data: null }
+      }
+
+      const { error, data } = await supabase
+        .from('profiles')
+        .upsert({
+          id: user.id,
+          ...profileData,
+          updated_at: new Date().toISOString(),
+        })
+        .select()
+
+      if (error) {
+        return { error, data: null }
+      }
+
+      // Update the profile completion status
+      if (data && data[0]?.username) {
+        setIsProfileComplete(true)
+      }
+
+      return { error: null, data }
+    } catch (error) {
+      console.error('Error updating profile:', error)
+      return { error, data: null }
     }
   }
 
@@ -142,6 +175,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email,
         password,
       })
+      
+      // Create a basic profile entry if signup is successful
+      if (response.data?.user && !response.error) {
+        // Create a default profile with a generated username
+        await supabase
+          .from('profiles')
+          .upsert({
+            id: response.data.user.id,
+            username: `user_${Math.random().toString(36).substring(2, 10)}`,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+      }
+      
       return response
     } catch (error) {
       console.error('Error in signUp:', error)
@@ -179,7 +226,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signIn,
     signOut,
     isProfileComplete,
-    refreshSession
+    refreshSession,
+    updateProfile
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -5,25 +5,35 @@ import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
 // Define protected route patterns
 const protectedRoutes = [
   '/dashboard',
-  '/documents',
-  '/research',
-  '/speeches',
-  '/conferences',
-  '/profile',
+  '/dashboard/write',
+  '/dashboard/research',
+  '/dashboard/prepare',
+  '/dashboard/conference',
+  '/dashboard/network',
+  '/dashboard/profile',
 ]
 
 // Define authentication exempt routes
 const authRoutes = [
-  '/login',
-  '/register',
-  '/profile-setup',
-  '/forgot-password',
-  '/reset-password',
+  '/dashboard/login',
+  '/dashboard/register',
+  '/dashboard/profile-setup',
+  '/dashboard/forgot-password',
+  '/dashboard/reset-password',
 ]
 
 export async function middleware(request: NextRequest) {
   const res = NextResponse.next()
   const supabase = createMiddlewareClient({ req: request, res })
+  
+  // Special handling for the root dashboard path to redirect to login if not authenticated
+  if (request.nextUrl.pathname === '/dashboard' || request.nextUrl.pathname === '/dashboard/') {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) {
+      return NextResponse.redirect(new URL('/dashboard/login', request.url))
+    }
+    return res
+  }
   
   // Check if the pathname matches any protected route pattern
   const isProtectedRoute = protectedRoutes.some(route => 
@@ -57,9 +67,23 @@ export async function middleware(request: NextRequest) {
   if (isProtectedRoute) {
     // If not authenticated, redirect to login with the current URL as redirect
     if (!session) {
-      const redirectUrl = new URL('/login', request.url)
+      const redirectUrl = new URL('/dashboard/login', request.url)
       redirectUrl.searchParams.set('redirect', request.nextUrl.pathname)
       return NextResponse.redirect(redirectUrl)
+    }
+    
+    // Check if profile is complete for routes that require it
+    if (session && request.nextUrl.pathname !== '/dashboard/profile-setup') {
+      // Check if user has a username
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('id', session.user.id)
+        .single()
+      
+      if (!profile?.username) {
+        return NextResponse.redirect(new URL('/dashboard/profile-setup', request.url))
+      }
     }
     
     // If authenticated, allow access to protected routes
@@ -72,16 +96,7 @@ export async function middleware(request: NextRequest) {
 // Configure middleware to match specific paths
 export const config = {
   matcher: [
+    '/dashboard',
     '/dashboard/:path*',
-    '/documents/:path*',
-    '/research/:path*',
-    '/speeches/:path*',
-    '/conferences/:path*',
-    '/profile/:path*',
-    '/login',
-    '/register',
-    '/profile-setup',
-    '/forgot-password',
-    '/reset-password',
   ],
 } 
