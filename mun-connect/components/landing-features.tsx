@@ -2,8 +2,9 @@
 
 import { useState } from "react"
 import { motion } from "framer-motion"
-import { PenTool, BookOpen, Users, Globe, MessageSquare, FileText, Sparkles, Zap } from "lucide-react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { PenTool, BookOpen, Users, Globe, MessageSquare, FileText, Sparkles, Zap, ArrowRight, ExternalLink } from "lucide-react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import Link from "next/link"
 
 const features = [
@@ -14,6 +15,7 @@ const features = [
     backDescription:
       "Our advanced AI analyzes successful MUN documents to help you craft persuasive arguments and polished papers.",
     link: "/features/ai-writing",
+    dashboardLink: "/dashboard/write",
   },
   {
     icon: BookOpen,
@@ -22,6 +24,7 @@ const features = [
     backDescription:
       "Leverage AI-powered research assistants that find, summarize, and organize relevant information for your position.",
     link: "/features/research-tools",
+    dashboardLink: "/dashboard/prepare",
   },
   {
     icon: Users,
@@ -30,6 +33,7 @@ const features = [
     backDescription:
       "Engage with AI delegates that respond realistically to your arguments and help you prepare for actual committee dynamics.",
     link: "/features/committee-simulation",
+    dashboardLink: "/dashboard/conference",
   },
   {
     icon: Globe,
@@ -38,6 +42,7 @@ const features = [
     backDescription:
       "Build your professional network with like-minded delegates and real diplomats through our verified connection platform.",
     link: "/features/global-networking",
+    dashboardLink: "/dashboard/network",
   },
   {
     icon: MessageSquare,
@@ -46,6 +51,7 @@ const features = [
     backDescription:
       "Share notes, draft resolutions together, and coordinate strategy with your team members during live committee sessions.",
     link: "/features/real-time-collaboration",
+    dashboardLink: "/dashboard/conference",
   },
   {
     icon: FileText,
@@ -54,6 +60,7 @@ const features = [
     backDescription:
       "Store, categorize, and quickly retrieve your position papers, speeches, and resolutions with our cloud-based system.",
     link: "/features/document-management",
+    dashboardLink: "/dashboard/write",
   },
   {
     icon: Sparkles,
@@ -62,6 +69,7 @@ const features = [
     backDescription:
       "Get detailed suggestions on content, structure, and diplomatic language to improve your MUN performance.",
     link: "/features/ai-feedback",
+    dashboardLink: "/dashboard/write",
   },
   {
     icon: Zap,
@@ -70,13 +78,14 @@ const features = [
     backDescription:
       "Build a portfolio of your MUN experience with detailed analytics on your performance and growth over time.",
     link: "/features/conference-tracking",
+    dashboardLink: "/dashboard/conference",
   },
 ]
 
 export function LandingFeatures() {
   return (
     <section className="py-20 bg-gradient-to-b from-background to-muted/50">
-      <div className="container">
+      <div className="container px-4 mx-auto">
         <div className="mx-auto max-w-3xl text-center mb-16">
           <h2 className="text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">Features That Set Us Apart</h2>
           <p className="mt-4 text-muted-foreground">
@@ -95,7 +104,7 @@ export function LandingFeatures() {
 }
 
 function FeatureCard({ feature, index }: { feature: (typeof features)[0]; index: number }) {
-  const [isFlipped, setIsFlipped] = useState(false)
+  const [isHovered, setIsHovered] = useState(false)
 
   return (
     <motion.div
@@ -103,53 +112,55 @@ function FeatureCard({ feature, index }: { feature: (typeof features)[0]; index:
       whileInView={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: index * 0.1 }}
       viewport={{ once: true }}
-      className="perspective-1000"
-      onMouseEnter={() => setIsFlipped(true)}
-      onMouseLeave={() => setIsFlipped(false)}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className="h-full"
     >
-      <div
-        className="relative w-full h-full transition-all duration-500 preserve-3d cursor-pointer"
-        style={{
-          transform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
-          transformStyle: "preserve-3d",
-        }}
+      <Card 
+        className={`h-full overflow-hidden transition-all duration-300 ${
+          isHovered 
+            ? "bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg" 
+            : "bg-gradient-to-br from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100"
+        }`}
       >
-        {/* Front of card */}
-        <Card className="h-full backface-hidden">
-          <CardHeader>
-            <feature.icon className="h-10 w-10 text-primary" />
-            <CardTitle className="mt-4">{feature.title}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <CardDescription>{feature.description}</CardDescription>
-          </CardContent>
-        </Card>
-
-        {/* Back of card */}
-        <Link href={feature.link} className="block h-full">
-          <Card
-            className="absolute inset-0 h-full bg-gradient-to-br from-blue-600 to-indigo-600 text-white backface-hidden"
-            style={{
-              transform: "rotateY(180deg)",
-              transformStyle: "preserve-3d",
-            }}
-          >
-            <CardHeader>
-              <feature.icon className="h-10 w-10 text-white" />
-              <CardTitle className="mt-4 text-white">{feature.title}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-blue-100">{feature.backDescription}</p>
-              <div className="mt-4 text-sm font-medium text-white flex items-center justify-end">
-                Learn more
-                <svg className="ml-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </div>
-            </CardContent>
-          </Card>
-        </Link>
-      </div>
+        <CardHeader className="pb-2">
+          <div className="flex justify-between items-start">
+            <feature.icon className={`h-10 w-10 ${isHovered ? "text-white" : "text-primary"}`} />
+          </div>
+          <CardTitle className={`mt-4 ${isHovered ? "text-white" : ""}`}>{feature.title}</CardTitle>
+        </CardHeader>
+        
+        <CardContent>
+          <div className="transition-all duration-300">
+            {isHovered ? (
+              <p className="text-blue-50">{feature.description}</p>
+            ) : (
+              <CardDescription>{feature.title}</CardDescription>
+            )}
+          </div>
+        </CardContent>
+        
+        {isHovered && (
+          <CardFooter className="flex gap-2 pt-2">
+            <Link href={feature.dashboardLink} className="flex-1">
+              <Button 
+                variant="secondary" 
+                className="w-full bg-white text-blue-600 hover:bg-blue-50"
+              >
+                Try it <ExternalLink className="ml-1 h-4 w-4" />
+              </Button>
+            </Link>
+            <Link href={feature.link} className="flex-1">
+              <Button 
+                variant="outline" 
+                className="w-full border-white text-white hover:bg-blue-700"
+              >
+                Learn more <ArrowRight className="ml-1 h-4 w-4" />
+              </Button>
+            </Link>
+          </CardFooter>
+        )}
+      </Card>
     </motion.div>
   )
 }

@@ -7,9 +7,9 @@ import { LandingFooter } from "@/components/landing-footer"
 
 export function LandingPage() {
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-screen flex-col w-full">
       <LandingHeader />
-      <main className="flex-1">
+      <main className="flex-1 w-full">
         <LandingHero />
         <LandingFeatures />
         <LandingTestimonials />
