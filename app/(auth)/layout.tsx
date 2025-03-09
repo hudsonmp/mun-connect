@@ -1,15 +1,25 @@
 "use client"
 
+import React, { useEffect } from "react"
 import Link from "next/link"
-import { useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { useAuth } from "../../lib/auth-context"
+import { useAuth, AuthProvider } from "../../lib/auth-context"
 
 export default function AuthLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  return (
+    <AuthProvider>
+      <AuthLayoutContent>
+        {children}
+      </AuthLayoutContent>
+    </AuthProvider>
+  )
+}
+
+function AuthLayoutContent({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth()
   const router = useRouter()
 
