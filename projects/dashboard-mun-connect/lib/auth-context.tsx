@@ -213,10 +213,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = async (email: string, password: string) => {
     try {
+      // Get the redirect URL from localStorage or use a default
+      let redirectUrl = 'https://mun-connect-dashboard.vercel.app/dashboard';
+      if (typeof window !== 'undefined' && window.localStorage) {
+        redirectUrl = window.localStorage.getItem('supabaseRedirectUrl') || redirectUrl;
+      }
+
       const response = await supabase.auth.signUp({
         email,
         password,
-      })
+        options: {
+          emailRedirectTo: redirectUrl,
+        }
+      });
       
       // Create a basic profile entry if signup is successful
       if (response.data?.user && !response.error) {
@@ -228,37 +237,78 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             username: `user_${Math.random().toString(36).substring(2, 10)}`,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
-          })
+          });
       }
       
-      return response
+      return response;
     } catch (error) {
-      console.error('Error in signUp:', error)
-      return { error, data: null }
+      console.error('Error in signUp:', error);
+      return { error, data: null };
     }
-  }
+  };
 
   const signIn = async (email: string, password: string) => {
     try {
       const response = await supabase.auth.signInWithPassword({
         email,
         password,
-      })
-      return response
+      });
+      
+      // Store successful sign-in info in localStorage for backup
+      if (response.data.session) {
+        localStorage.setItem('authState', JSON.stringify({
+          isAuthenticated: true,
+          userId: response.data.session.user.id,
+          lastUpdated: new Date().toISOString()
+        }));
+        
+        // Explicitly set the session to ensure it's stored properly
+        await supabase.auth.setSession({
+          access_token: response.data.session.access_token,
+          refresh_token: response.data.session.refresh_token,
+        });
+        
+        // Set session and user in context
+        setSession(response.data.session);
+        setUser(response.data.session.user);
+        
+        // Check if profile is complete
+        try {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('username')
+            .eq('id', response.data.session.user.id)
+            .single();
+            
+          setIsProfileComplete(!!profile?.username);
+        } catch (error) {
+          console.error('Error checking profile on sign in:', error);
+        }
+      }
+      
+      return response;
     } catch (error) {
-      console.error('Error in signIn:', error)
-      return { error, data: null }
+      console.error('Error in signIn:', error);
+      return { error, data: null };
     }
-  }
+  };
 
   const signOut = async () => {
     try {
-      await supabase.auth.signOut()
-      router.push('/')
+      await supabase.auth.signOut();
+      setSession(null);
+      setUser(null);
+      setIsProfileComplete(false);
+      
+      // Clear the authentication state from localStorage
+      localStorage.removeItem('authState');
+      
+      // Navigate to the login page
+      router.push('/dashboard/login');
     } catch (error) {
-      console.error('Error in signOut:', error)
+      console.error('Error signing out:', error);
     }
-  }
+  };
 
   const value = {
     user,

@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { useAuth } from "../../../lib/auth-context"
+import { supabase } from "../../../lib/supabase"
 import { Button } from "../../../components/ui/button"
 import {
   Form,
@@ -32,15 +33,74 @@ function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const redirectPath = searchParams.get('redirect') || '/dashboard'
+  const authError = searchParams.get('error')
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [loginAttempts, setLoginAttempts] = useState(0)
 
   // If already authenticated, redirect to the specified path
   useEffect(() => {
     if (!isLoading && user) {
+      console.log("User authenticated, redirecting to:", redirectPath)
       router.push(redirectPath)
     }
   }, [user, isLoading, router, redirectPath])
+
+  // Show error message if there's an auth error in URL
+  useEffect(() => {
+    if (authError) {
+      let errorMessage = "Authentication error occurred. Please try again."
+      
+      if (authError === 'auth_error') {
+        errorMessage = "There was a problem with your authentication. Please try logging in again."
+      } else if (authError === 'auth_exception') {
+        errorMessage = "An unexpected error occurred. Please try again later."
+      } else if (authError === 'session_expired') {
+        errorMessage = "Your session has expired. Please log in again."
+      }
+      
+      toast({
+        variant: "destructive",
+        title: "Authentication Error",
+        description: errorMessage,
+      })
+    }
+  }, [authError, toast])
+
+  // Check localStorage for existing auth state
+  useEffect(() => {
+    if (!user && !isLoading) {
+      const storedAuthState = localStorage.getItem('authState')
+      if (storedAuthState) {
+        try {
+          const authState = JSON.parse(storedAuthState)
+          const lastUpdated = new Date(authState.lastUpdated)
+          const now = new Date()
+          const hoursSinceUpdate = (now.getTime() - lastUpdated.getTime()) / (1000 * 60 * 60)
+          
+          // If auth state is less than 24 hours old, try to restore the session
+          if (hoursSinceUpdate < 24 && authState.isAuthenticated) {
+            console.log("Found recent auth state, attempting to restore session")
+            // Attempt to refresh the session
+            if (typeof supabase !== 'undefined') {
+              supabase.auth.getSession().then(({ data, error }) => {
+                if (!error && data.session) {
+                  console.log("Session restored successfully")
+                  router.push(redirectPath)
+                } else {
+                  console.log("Could not restore session:", error)
+                  localStorage.removeItem('authState')
+                }
+              })
+            }
+          }
+        } catch (e) {
+          console.error("Error parsing auth state:", e)
+          localStorage.removeItem('authState')
+        }
+      }
+    }
+  }, [isLoading, user, router, redirectPath])
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -52,26 +112,60 @@ function LoginForm() {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSubmitting(true)
+    setLoginAttempts(prev => prev + 1)
+    
     try {
-      const { error } = await signIn(values.email, values.password)
+      console.log("Attempting to sign in user:", values.email)
+      const { error, data } = await signIn(values.email, values.password)
       
       if (error) {
+        console.error("Sign in error:", error)
         toast({
           variant: "destructive",
           title: "Login failed",
           description: error.message || "Please check your credentials and try again.",
         })
+        
+        // If we've tried multiple times, suggest password reset
+        if (loginAttempts >= 2) {
+          toast({
+            title: "Trouble logging in?",
+            description: (
+              <div>
+                <p>You can <a href="/dashboard/forgot-password" className="underline text-blue-600">reset your password</a> if needed.</p>
+              </div>
+            ),
+          })
+        }
+        
         return
       }
       
-      toast({
-        title: "Login successful",
-        description: "Welcome back to MUN Connect!",
-      })
-      
-      // Redirect to the specified path or dashboard
-      router.push(redirectPath)
+      if (data?.session) {
+        console.log("Login successful, redirecting to:", redirectPath)
+        
+        toast({
+          title: "Login successful",
+          description: "Welcome back to MUN Connect!",
+        })
+        
+        // Force reload the page to ensure session is picked up
+        if (typeof window !== 'undefined') {
+          window.location.href = redirectPath
+        } else {
+          // Fallback if window is not available
+          router.push(redirectPath)
+        }
+      } else {
+        console.log("No session returned after login")
+        toast({
+          variant: "destructive",
+          title: "Login issue",
+          description: "Logged in but no session was created. Please try again.",
+        })
+      }
     } catch (error) {
+      console.error("Exception during login:", error)
       toast({
         variant: "destructive",
         title: "Something went wrong",
