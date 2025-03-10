@@ -10,14 +10,15 @@ const DEBUG_AUTH = true
 // Get environment variables
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-const redirectUrl = process.env.NEXT_PUBLIC_REDIRECT_URL || 'https://mun-connect-dashboard.vercel.app/dashboard/auth/callback'
+const redirectUrl = process.env.NEXT_PUBLIC_REDIRECT_URL || 'https://mun-connect-dashboard.vercel.app/auth/callback'
 
 // Validate environment variables
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Missing Supabase environment variables. Check your .env file.')
+  console.error('Missing Supabase environment variables.')
   if (DEBUG_AUTH) {
-    console.log('NEXT_PUBLIC_SUPABASE_URL:', supabaseUrl)
+    console.log('NEXT_PUBLIC_SUPABASE_URL:', supabaseUrl || 'undefined')
     console.log('NEXT_PUBLIC_SUPABASE_ANON_KEY:', supabaseAnonKey ? '[REDACTED]' : 'undefined')
+    console.log('Environment:', process.env.NODE_ENV)
   }
 }
 
