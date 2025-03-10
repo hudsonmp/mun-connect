@@ -86,6 +86,30 @@ export default function DebugPage() {
     addLog('Local storage cleared')
   }
   
+  const handleForceReauth = async () => {
+    addLog('Forcing reauth - clearing local storage and refreshing session...')
+    
+    // Clear all auth state
+    localStorage.removeItem('authState')
+    localStorage.removeItem('supabase-auth')
+    setLocalAuthState(null)
+    
+    try {
+      // Sign out first to clear server-side state
+      await supabase.auth.signOut()
+      addLog('Signed out from Supabase')
+      
+      // Wait a moment
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // Reload the page to get a clean slate
+      addLog('Reloading page to get clean slate...')
+      window.location.href = '/dashboard/login'
+    } catch (err) {
+      addLog(`Reauth error: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+  
   const handleTestApi = async () => {
     addLog('Testing authenticated API call...')
     try {
@@ -202,6 +226,12 @@ export default function DebugPage() {
             className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
           >
             Clear Storage
+          </button>
+          <button 
+            onClick={handleForceReauth}
+            className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700"
+          >
+            Force Reauth
           </button>
           <button 
             onClick={handleTestApi}

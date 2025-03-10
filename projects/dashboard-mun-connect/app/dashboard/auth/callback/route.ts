@@ -5,8 +5,22 @@ import { NextRequest, NextResponse } from 'next/server'
 // Debug flag
 const DEBUG_AUTH = true
 
+// Base path from next.config
+const BASE_PATH = '/dashboard'
+
 // Mark as dynamic to ensure we don't cache the auth response
 export const dynamic = 'force-dynamic'
+
+// Helper to create proper paths accounting for the basePath
+const getPath = (path: string) => {
+  // If the path already starts with the base path, don't duplicate it
+  if (path.startsWith(BASE_PATH)) {
+    // Remove the base path prefix
+    return path.substring(BASE_PATH.length) || '/'
+  }
+  // If it doesn't start with the base path, return as is
+  return path
+}
 
 /**
  * Handle authentication callback requests for email verification, password reset, etc.
@@ -19,12 +33,16 @@ export async function GET(request: NextRequest) {
   const errorDescription = requestUrl.searchParams.get('error_description')
   const next = requestUrl.searchParams.get('next') || '/dashboard'
   
+  // Normalize the next path
+  const normalizedNext = getPath(next)
+  
   if (DEBUG_AUTH) {
     console.log('🔐 Auth callback triggered with:')
     console.log('- URL:', request.url)
     console.log('- Code exists:', !!code)
     console.log('- Error:', error || 'none')
-    console.log('- Redirect destination:', next)
+    console.log('- Original redirect destination:', next)
+    console.log('- Normalized redirect destination:', normalizedNext)
     console.log('- Headers:', Object.fromEntries([...request.headers.entries()]))
   }
   
@@ -32,14 +50,14 @@ export async function GET(request: NextRequest) {
   if (error) {
     console.error('Auth error in callback:', error, errorDescription)
     return NextResponse.redirect(
-      new URL(`/dashboard/login?error=${error}&error_description=${encodeURIComponent(errorDescription || '')}`, requestUrl.origin)
+      new URL(`/login?error=${error}&error_description=${encodeURIComponent(errorDescription || '')}`, requestUrl.origin + BASE_PATH)
     )
   }
   
   // If there's no auth code, redirect to login
   if (!code) {
     if (DEBUG_AUTH) console.log('No code parameter found in callback URL')
-    return NextResponse.redirect(new URL('/dashboard/login', requestUrl.origin))
+    return NextResponse.redirect(new URL('/login', requestUrl.origin + BASE_PATH))
   }
   
   try {
@@ -55,7 +73,7 @@ export async function GET(request: NextRequest) {
     if (error) {
       console.error('Error exchanging code for session:', error)
       return NextResponse.redirect(
-        new URL(`/dashboard/login?error=session_error&error_description=${encodeURIComponent(error.message)}`, requestUrl.origin)
+        new URL(`/login?error=session_error&error_description=${encodeURIComponent(error.message)}`, requestUrl.origin + BASE_PATH)
       )
     }
     
@@ -100,8 +118,9 @@ export async function GET(request: NextRequest) {
       }
     }
     
-    // Set a cookie to indicate successful auth
-    const dashboardUrl = new URL(next, requestUrl.origin)
+    // Set a cookie to indicate successful auth - make sure to redirect to normalized path
+    const finalRedirectPath = normalizedNext === '/' ? BASE_PATH : `${BASE_PATH}${normalizedNext}`
+    const dashboardUrl = new URL(finalRedirectPath, requestUrl.origin)
     const response = NextResponse.redirect(dashboardUrl)
     
     // Set cache headers to prevent caching
@@ -110,9 +129,7 @@ export async function GET(request: NextRequest) {
     response.headers.set('Expires', '0')
     
     // Add a debug parameter to help track where the user came from
-    if (dashboardUrl.pathname === '/dashboard') {
-      dashboardUrl.searchParams.set('auth_source', 'callback')
-    }
+    dashboardUrl.searchParams.set('auth_source', 'callback')
     
     if (DEBUG_AUTH) console.log('Redirecting to:', dashboardUrl.toString())
     
@@ -120,7 +137,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Exception in auth callback:', error)
     return NextResponse.redirect(
-      new URL('/dashboard/login?error=callback_exception', requestUrl.origin)
+      new URL('/login?error=callback_exception', requestUrl.origin + BASE_PATH)
     )
   }
 } 

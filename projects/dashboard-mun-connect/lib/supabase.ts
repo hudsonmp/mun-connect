@@ -52,11 +52,39 @@ if (typeof window !== 'undefined') {
     try {
       if (DEBUG_AUTH) console.log('Initializing Supabase client and session')
       
+      // First check if we have a stored auth state that claims we're authenticated
+      const storedAuthState = localStorage.getItem('authState');
+      let localAuthClaim = false;
+      
+      if (storedAuthState) {
+        try {
+          const authState = JSON.parse(storedAuthState);
+          const lastUpdated = new Date(authState.lastUpdated);
+          const now = new Date();
+          const hoursSinceUpdate = (now.getTime() - lastUpdated.getTime()) / (1000 * 60 * 60);
+          
+          // If auth state is recent and claims authentication
+          if (hoursSinceUpdate < 24 && authState.isAuthenticated) {
+            localAuthClaim = true;
+            if (DEBUG_AUTH) console.log('Found recent local auth state claiming authentication');
+          }
+        } catch (e) {
+          console.error('Error parsing auth state:', e);
+        }
+      }
+      
       // Try to get current session
       const { data, error } = await supabase.auth.getSession()
       
       if (error) {
         console.error('Error initializing session:', error)
+        
+        // If we have a local auth claim but Supabase session failed, try to restore it
+        if (localAuthClaim) {
+          if (DEBUG_AUTH) console.log('Attempting to recover session based on local auth claim');
+          await supabase.auth.refreshSession();
+        }
+        
         return
       }
       
@@ -76,19 +104,26 @@ if (typeof window !== 'undefined') {
             refresh_token: data.session.refresh_token,
           })
           if (DEBUG_AUTH) console.log('Session explicitly set')
+          
+          // Ensure localStorage is synced with this valid session
+          localStorage.setItem('authState', JSON.stringify({
+            isAuthenticated: true,
+            userId: data.session.user.id,
+            lastUpdated: new Date().toISOString()
+          }))
         } catch (err) {
           console.error('Error setting session:', err)
         }
-        
-        // Store auth state in localStorage as a backup mechanism
-        localStorage.setItem('authState', JSON.stringify({
-          isAuthenticated: true,
-          userId: data.session.user.id,
-          lastUpdated: new Date().toISOString()
-        }))
       } else {
         if (DEBUG_AUTH) console.log('No active session found during initialization')
-        localStorage.removeItem('authState')
+        
+        // If Supabase has no session but we have a local auth claim, 
+        // we have a mismatch - clear localStorage to resync
+        if (localAuthClaim) {
+          if (DEBUG_AUTH) console.log('Auth state mismatch: Local claims auth but Supabase has no session. Clearing local state.');
+          localStorage.removeItem('authState');
+          localStorage.removeItem('supabase-auth');
+        }
       }
     } catch (err) {
       console.error('Exception initializing session:', err)

@@ -91,6 +91,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
 
+  // Helper function to get proper path with or without basePath
+  const getPath = useCallback((path: string) => {
+    // Since basePath is '/dashboard', we need to remove it from paths that already include it
+    if (path.startsWith('/dashboard')) {
+      // For paths like '/dashboard/login', we want to return just '/login'
+      return path.substring('/dashboard'.length) || '/'
+    }
+    // For paths without the prefix, return as-is
+    return path
+  }, [])
+
   // Helper function to check if a path is an auth path
   const isAuthPath = useCallback((path: string) => {
     return path.includes('/login') || path.includes('/register') || path.includes('/profile-setup')
@@ -159,7 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // If we still don't have a session and we're not on an auth path, redirect to login
         if (!isAuthPath(pathname || '')) {
           if (DEBUG_AUTH) console.log('No session found, redirecting to login')
-          router.push('/dashboard/login')
+          router.push(getPath('/dashboard/login'))
         }
       } else if (data.session) {
         if (DEBUG_AUTH) console.log('Session refreshed successfully')
@@ -209,7 +220,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Exception in refreshSession:', error)
     }
-  }, [router, pathname, isAuthPath])
+  }, [router, pathname, isAuthPath, getPath])
 
   // Function to update user profile with error handling
   const updateProfile = async (profileData: any) => {
@@ -532,17 +543,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           
           if (redirectPath) {
             if (DEBUG_AUTH) console.log('Redirecting to:', redirectPath)
-            router.push(redirectPath)
+            router.push(getPath(redirectPath))
           } else if (!profile?.username) {
             if (DEBUG_AUTH) console.log('Profile not complete, redirecting to profile setup')
-            router.push('/dashboard/profile-setup')
+            router.push(getPath('/dashboard/profile-setup'))
           } else {
             if (DEBUG_AUTH) console.log('Redirecting to dashboard')
-            router.push('/dashboard')
+            router.push(getPath('/dashboard'))
           }
         } catch (error) {
           console.error('Error checking profile on sign in:', error)
-          router.push('/dashboard')
+          router.push(getPath('/dashboard'))
         }
       }
       
@@ -566,9 +577,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null)
       setIsProfileComplete(false)
       localStorage.removeItem('authState')
+      localStorage.removeItem('supabase-auth')
       
       // Navigate to login page
-      router.push('/dashboard/login')
+      router.push(getPath('/dashboard/login'))
       
       if (DEBUG_AUTH) console.log('Sign out complete')
     } catch (error) {

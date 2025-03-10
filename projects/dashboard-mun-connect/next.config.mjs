@@ -26,13 +26,27 @@ const nextConfig = {
     DEPLOYMENT_TARGET: 'dashboard',
     NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL || 'https://mun-connect-dashboard.vercel.app',
     NEXT_PUBLIC_STATIC_SITE_URL: process.env.NEXT_PUBLIC_STATIC_SITE_URL || 'https://mun-connect.vercel.app',
+    // Add this to help components be aware of the basePath
+    NEXT_PUBLIC_BASE_PATH: '/dashboard',
   },
-  // Configure redirects from the root to the dashboard 
+  // Configure redirects from the root to the dashboard and fix duplicate paths
   async redirects() {
     return [
       {
         source: '/',
         destination: '/dashboard',
+        permanent: false,
+      },
+      // Handle duplicate dashboard path
+      {
+        source: '/dashboard/dashboard',
+        destination: '/dashboard',
+        permanent: false,
+      },
+      // Handle possible auth callback paths
+      {
+        source: '/dashboard/dashboard/auth/callback',
+        destination: '/dashboard/auth/callback',
         permanent: false,
       }
     ]
