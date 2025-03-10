@@ -655,7 +655,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             router.push(getPath(redirectPath))
           } else if (!profile?.username) {
             if (DEBUG_AUTH) console.log('Profile not complete, redirecting to profile setup')
-            router.push(getPath('/dashboard/profile-setup'))
+            router.push(getPath('/profile-setup'))
           } else {
             if (DEBUG_AUTH) console.log('Redirecting to dashboard')
             router.push(getPath('/dashboard'))

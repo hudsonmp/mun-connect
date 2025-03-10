@@ -90,7 +90,7 @@ export default function DashboardPage() {
           <Button
             variant="outline"
             className="w-full border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900"
-            onClick={() => router.push('/dashboard/profile')}
+            onClick={() => router.push('/profile')}
           >
             Update Profile
           </Button>

@@ -290,7 +290,7 @@ export default function ProfilePage() {
   }
 
   const navigateToConferencesPage = () => {
-    router.push("/dashboard/conferences")
+    router.push("/conferences")
   }
 
   if (!user) {
