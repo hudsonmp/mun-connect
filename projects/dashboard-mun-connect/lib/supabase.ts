@@ -2,6 +2,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from './database.types'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
 // Debug flag for auth issues
 const DEBUG_AUTH = true
@@ -20,8 +21,8 @@ if (!supabaseUrl || !supabaseAnonKey) {
   }
 }
 
-// Create Supabase client with optimized configuration for auth
-export const supabase = createClient<Database>(
+// Create Supabase client (legacy way)
+export const supabaseAdmin = createClient<Database>(
   supabaseUrl || '',
   supabaseAnonKey || '',
   {
@@ -35,6 +36,14 @@ export const supabase = createClient<Database>(
     },
   }
 )
+
+// Create Supabase client with the newer approach
+export const supabase = typeof window !== 'undefined' 
+  ? createClientComponentClient<Database>({
+      supabaseUrl: supabaseUrl,
+      supabaseKey: supabaseAnonKey,
+    })
+  : supabaseAdmin // Fallback for server contexts
 
 // Initialize session and set up error recovery
 if (typeof window !== 'undefined') {

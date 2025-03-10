@@ -8,6 +8,67 @@ import { useRouter, usePathname } from 'next/navigation'
 // Debug flag to help debug auth issues
 const DEBUG_AUTH = true
 
+// Add a browser console debugger function
+const debugAuthState = () => {
+  if (typeof window === 'undefined' || !DEBUG_AUTH) return;
+  
+  console.group('%c🔐 Auth State Debugger', 'color: #10B981; font-weight: bold; font-size: 14px;');
+  
+  // Check for cookies 
+  console.log('%cCookies:', 'font-weight: bold;');
+  console.table(document.cookie.split(';').reduce((acc, cookie) => {
+    const [key, value] = cookie.trim().split('=');
+    if (key) acc[key] = value || 'empty';
+    return acc;
+  }, {} as Record<string, string>));
+  
+  // Check localStorage
+  console.log('%cLocal Storage:', 'font-weight: bold;');
+  const localStorageItems = {
+    'authState': localStorage.getItem('authState'),
+    'supabase-auth': localStorage.getItem('supabase-auth'),
+    'supabaseRedirectUrl': localStorage.getItem('supabaseRedirectUrl'),
+    'redirect_count': localStorage.getItem('redirect_count'),
+  };
+  console.table(localStorageItems);
+  
+  // Check for service worker
+  console.log('%cService Worker Status:', 'font-weight: bold;');
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(registrations => {
+      console.log(`Service Workers: ${registrations.length} registered`);
+      registrations.forEach(reg => console.log(reg.scope));
+    });
+  } else {
+    console.log('Service Workers not supported');
+  }
+  
+  // Summarize auth state
+  console.log('%cAuth Summary:', 'font-weight: bold;');
+  try {
+    const authState = localStorage.getItem('authState') ? JSON.parse(localStorage.getItem('authState')!) : null;
+    const supabaseAuth = localStorage.getItem('supabase-auth') ? JSON.parse(localStorage.getItem('supabase-auth')!) : null;
+    
+    console.log({
+      isAuthenticated: authState?.isAuthenticated || false,
+      userId: authState?.userId || 'none',
+      lastUpdated: authState?.lastUpdated ? new Date(authState.lastUpdated).toLocaleString() : 'never',
+      hasSupabaseAuth: !!supabaseAuth,
+      currentUrl: window.location.href,
+      userAgent: navigator.userAgent,
+    });
+  } catch (e) {
+    console.error('Error parsing auth state:', e);
+  }
+  
+  console.groupEnd();
+};
+
+// Call debug function on load
+if (typeof window !== 'undefined' && DEBUG_AUTH) {
+  setTimeout(debugAuthState, 1000);
+}
+
 type AuthContextType = {
   user: User | null
   session: Session | null
@@ -39,6 +100,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshSession = useCallback(async () => {
     try {
       if (DEBUG_AUTH) console.log('Refreshing session...')
+      
+      // Debug current auth state
+      debugAuthState();
       
       // Try to get current session first before refreshing
       const { data: currentSession } = await supabase.auth.getSession()
@@ -89,6 +153,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
         
+        // Debug auth state again
+        debugAuthState();
+        
         // If we still don't have a session and we're not on an auth path, redirect to login
         if (!isAuthPath(pathname || '')) {
           if (DEBUG_AUTH) console.log('No session found, redirecting to login')
@@ -111,6 +178,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           access_token: data.session.access_token,
           refresh_token: data.session.refresh_token,
         })
+        
+        // Debug successful refresh
+        debugAuthState();
       } else {
         if (DEBUG_AUTH) console.log('No session after refresh')
         

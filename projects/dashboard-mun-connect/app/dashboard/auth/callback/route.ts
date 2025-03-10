@@ -17,12 +17,15 @@ export async function GET(request: NextRequest) {
   const code = requestUrl.searchParams.get('code')
   const error = requestUrl.searchParams.get('error')
   const errorDescription = requestUrl.searchParams.get('error_description')
+  const next = requestUrl.searchParams.get('next') || '/dashboard'
   
   if (DEBUG_AUTH) {
-    console.log('Auth callback triggered with:')
+    console.log('🔐 Auth callback triggered with:')
     console.log('- URL:', request.url)
     console.log('- Code exists:', !!code)
     console.log('- Error:', error || 'none')
+    console.log('- Redirect destination:', next)
+    console.log('- Headers:', Object.fromEntries([...request.headers.entries()]))
   }
   
   // Handle errors from Supabase
@@ -57,12 +60,15 @@ export async function GET(request: NextRequest) {
     }
     
     if (DEBUG_AUTH) {
-      console.log('Auth successful, user authenticated')
+      console.log('🎉 Auth successful, user authenticated')
       console.log('Session data:', data.session ? 'Session exists' : 'No session')
       
       if (data.session) {
         console.log('User ID:', data.session.user.id)
         console.log('Email:', data.session.user.email)
+        console.log('Session expires:', data.session.expires_at 
+          ? new Date(data.session.expires_at * 1000).toLocaleString() 
+          : 'No expiry set')
       }
     }
     
@@ -94,8 +100,23 @@ export async function GET(request: NextRequest) {
       }
     }
     
-    // Redirect to the dashboard
-    return NextResponse.redirect(new URL('/dashboard', requestUrl.origin))
+    // Set a cookie to indicate successful auth
+    const dashboardUrl = new URL(next, requestUrl.origin)
+    const response = NextResponse.redirect(dashboardUrl)
+    
+    // Set cache headers to prevent caching
+    response.headers.set('Cache-Control', 'no-store, max-age=0')
+    response.headers.set('Pragma', 'no-cache')
+    response.headers.set('Expires', '0')
+    
+    // Add a debug parameter to help track where the user came from
+    if (dashboardUrl.pathname === '/dashboard') {
+      dashboardUrl.searchParams.set('auth_source', 'callback')
+    }
+    
+    if (DEBUG_AUTH) console.log('Redirecting to:', dashboardUrl.toString())
+    
+    return response
   } catch (error) {
     console.error('Exception in auth callback:', error)
     return NextResponse.redirect(
