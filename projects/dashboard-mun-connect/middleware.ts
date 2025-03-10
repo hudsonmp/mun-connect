@@ -44,6 +44,23 @@ export async function middleware(request: NextRequest) {
       if (DEBUG_AUTH) console.log('Auth bypass detected, skipping middleware checks')
       return res
     }
+
+    // CALLBACK DETECTION: Always skip middleware for URLs with auth code params
+    if (request.nextUrl.searchParams.has('code')) {
+      if (DEBUG_AUTH) console.log('Auth code parameter detected, skipping middleware')
+      return res
+    }
+    
+    // PATH TYPE DETECTION: Determine what kind of route we're on
+    const isAuthCallbackRoute = authCallbackRoutes.some(route => 
+      request.nextUrl.pathname.includes(route)
+    )
+    
+    // Skip middleware for auth callback routes
+    if (isAuthCallbackRoute) {
+      if (DEBUG_AUTH) console.log('Auth callback route detected, skipping middleware')
+      return res
+    }
     
     // REDIRECT LOOP DETECTION: Check for too many redirects
     const redirectCount = parseInt(request.cookies.get('redirect_count')?.value || '0')
@@ -58,27 +75,17 @@ export async function middleware(request: NextRequest) {
     // Create Supabase client
     const supabase = createMiddlewareClient({ req: request, res })
     
-    // PATH TYPE DETECTION: Determine what kind of route we're on
-    const isAuthCallbackRoute = authCallbackRoutes.some(route => 
-      request.nextUrl.pathname.startsWith(route)
-    )
-    
-    // Skip middleware for auth callback routes
-    if (isAuthCallbackRoute || request.nextUrl.searchParams.has('code')) {
-      if (DEBUG_AUTH) console.log('Auth callback route detected, skipping middleware')
-      return res
-    }
-    
     const isProtectedRoute = protectedRoutes.some(route => 
       request.nextUrl.pathname.startsWith(route)
     )
     
     const isAuthRoute = authRoutes.some(route => 
-      request.nextUrl.pathname.startsWith(route)
+      request.nextUrl.pathname.startsWith(route) || request.nextUrl.pathname === route
     )
     
     // Skip middleware for non-protected and non-auth routes
     if (!isProtectedRoute && !isAuthRoute) {
+      if (DEBUG_AUTH) console.log(`Non-protected, non-auth route: ${request.nextUrl.pathname}, skipping middleware`)
       return res
     }
     
@@ -99,9 +106,23 @@ export async function middleware(request: NextRequest) {
     // AUTH ROUTE HANDLING: Routes like login, register, etc.
     if (isAuthRoute) {
       if (session) {
+        // Don't redirect if there's a specific error parameter
+        if (request.nextUrl.searchParams.has('error')) {
+          if (DEBUG_AUTH) console.log('Error parameter present, allowing access to auth route despite session')
+          return res
+        }
+        
         // User is already logged in, redirect to dashboard
         if (DEBUG_AUTH) console.log('User is authenticated, redirecting from auth route to dashboard')
-        return NextResponse.redirect(new URL('/dashboard', request.url))
+        const dashboardUrl = new URL('/dashboard', request.url)
+        
+        // Preserve any redirect parameter
+        const redirectParam = request.nextUrl.searchParams.get('redirect')
+        if (redirectParam) {
+          dashboardUrl.pathname = redirectParam
+        }
+        
+        return NextResponse.redirect(dashboardUrl)
       }
       // Not logged in, allow access to auth routes
       return res
@@ -118,6 +139,8 @@ export async function middleware(request: NextRequest) {
           new URL(`/dashboard/login?redirect=${encodeURIComponent(request.nextUrl.pathname)}`, request.url)
         )
         loginRedirect.cookies.set('redirect_count', (redirectCount + 1).toString())
+        // Ensure cache control headers prevent caching
+        loginRedirect.headers.set('Cache-Control', 'no-store, max-age=0')
         return loginRedirect
       }
       
@@ -152,6 +175,8 @@ export async function middleware(request: NextRequest) {
       
       // Reset redirect count since we're not redirecting
       res.cookies.set('redirect_count', '0')
+      // Ensure cache control prevents caching of protected routes
+      res.headers.set('Cache-Control', 'no-store, max-age=0')
       return res
     }
   } catch (error) {

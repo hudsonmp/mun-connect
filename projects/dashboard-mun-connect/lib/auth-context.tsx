@@ -39,18 +39,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshSession = useCallback(async () => {
     try {
       if (DEBUG_AUTH) console.log('Refreshing session...')
+      
+      // Try to get current session first before refreshing
+      const { data: currentSession } = await supabase.auth.getSession()
+      
+      if (currentSession?.session) {
+        if (DEBUG_AUTH) console.log('Found existing session before refresh')
+        setSession(currentSession.session)
+        setUser(currentSession.session.user)
+      }
+      
+      // Now attempt to refresh the session
       const { data, error } = await supabase.auth.refreshSession()
       
       if (error) {
         console.error('Error refreshing session:', error)
         
-        // Try to get existing session before giving up
+        // If we already set a session above, we can return early
+        if (currentSession?.session) {
+          if (DEBUG_AUTH) console.log('Using existing session despite refresh failure')
+          return
+        }
+        
+        // Try one more time to get existing session before giving up
         const { data: sessionData } = await supabase.auth.getSession()
         if (sessionData?.session) {
           if (DEBUG_AUTH) console.log('Found existing session after refresh failure')
           setSession(sessionData.session)
           setUser(sessionData.session.user)
           return
+        }
+        
+        // Check localStorage backup
+        const storedAuthState = localStorage.getItem('authState')
+        if (storedAuthState) {
+          try {
+            const authState = JSON.parse(storedAuthState)
+            const lastUpdated = new Date(authState.lastUpdated)
+            const now = new Date()
+            const hoursSinceUpdate = (now.getTime() - lastUpdated.getTime()) / (1000 * 60 * 60)
+            
+            if (hoursSinceUpdate < 24 && authState.isAuthenticated) {
+              if (DEBUG_AUTH) console.log('Using localStorage backup auth state')
+              // Don't redirect here, we'll try to recover the session via other means
+              return
+            }
+          } catch (e) {
+            console.error('Error parsing backup auth state:', e)
+          }
         }
         
         // If we still don't have a session and we're not on an auth path, redirect to login
@@ -69,8 +105,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           userId: data.session.user.id,
           lastUpdated: new Date().toISOString()
         }))
+        
+        // Explicitly set the session in Supabase client too
+        await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        })
       } else {
         if (DEBUG_AUTH) console.log('No session after refresh')
+        
+        // Check localStorage backup before clearing everything
+        const storedAuthState = localStorage.getItem('authState')
+        if (storedAuthState) {
+          try {
+            const authState = JSON.parse(storedAuthState)
+            const lastUpdated = new Date(authState.lastUpdated)
+            const now = new Date()
+            const hoursSinceUpdate = (now.getTime() - lastUpdated.getTime()) / (1000 * 60 * 60)
+            
+            if (hoursSinceUpdate < 24 && authState.isAuthenticated) {
+              if (DEBUG_AUTH) console.log('Recent auth state in localStorage, not clearing session')
+              return
+            }
+          } catch (e) {
+            console.error('Error parsing stored auth state:', e)
+          }
+        }
+        
         setSession(null)
         setUser(null)
         localStorage.removeItem('authState')
@@ -373,6 +434,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           userId: response.data.session.user.id,
           lastUpdated: new Date().toISOString()
         }))
+
+        // Explicitly set the session in Supabase client too
+        try {
+          await supabase.auth.setSession({
+            access_token: response.data.session.access_token,
+            refresh_token: response.data.session.refresh_token,
+          })
+          if (DEBUG_AUTH) console.log('Session explicitly set after sign in')
+        } catch (e) {
+          console.error('Error setting session after sign in:', e)
+        }
         
         // Check if profile is complete
         try {
@@ -383,8 +455,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             .single()
             
           setIsProfileComplete(!!profile?.username)
+          
+          // Handle redirect after successful login
+          const params = new URLSearchParams(window.location.search)
+          const redirectPath = params.get('redirect')
+          
+          if (redirectPath) {
+            if (DEBUG_AUTH) console.log('Redirecting to:', redirectPath)
+            router.push(redirectPath)
+          } else if (!profile?.username) {
+            if (DEBUG_AUTH) console.log('Profile not complete, redirecting to profile setup')
+            router.push('/dashboard/profile-setup')
+          } else {
+            if (DEBUG_AUTH) console.log('Redirecting to dashboard')
+            router.push('/dashboard')
+          }
         } catch (error) {
           console.error('Error checking profile on sign in:', error)
+          router.push('/dashboard')
         }
       }
       
