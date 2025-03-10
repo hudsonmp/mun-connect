@@ -27,111 +27,103 @@ const authCallbackRoutes = [
   '/auth/callback',
   '/api/auth',
   '/auth/confirm',
+  '/dashboard/auth/callback',
 ]
 
-// Debug flag - set to true to log authentication issues
+// Debug flag - enable to log authentication flow details
 const DEBUG_AUTH = true
 
 export async function middleware(request: NextRequest) {
-  // Check for bypass flag to prevent infinite redirects
-  const bypassAuth = request.nextUrl.searchParams.get('bypass_auth') === 'true'
-  if (bypassAuth) {
-    // Skip all auth checks if bypass is enabled for debugging
-    return NextResponse.next()
-  }
-  
-  // Create a response object that we'll use for cookies
+  // Create response that we'll modify with cookies if needed
   const res = NextResponse.next()
   
   try {
-    // Create Supabase client with explicit cookie handling
-    const supabase = createMiddlewareClient({ 
-      req: request, 
-      res,
-    })
-    
-    // Check for auth callback parameters in URL
-    const isAuthCallback = request.nextUrl.searchParams.has('access_token') || 
-                          request.nextUrl.searchParams.has('refresh_token') ||
-                          request.nextUrl.searchParams.has('code')
-    
-    // If this is an auth callback URL, proceed without redirection
-    if (isAuthCallback) {
-      if (DEBUG_AUTH) console.log('Auth callback detected, skipping middleware')
+    // CIRCUIT BREAKER: Check for backdoor URL parameter to break infinite redirect loops
+    // This is for development/debugging purposes
+    if (request.nextUrl.searchParams.has('_auth_bypass')) {
+      if (DEBUG_AUTH) console.log('Auth bypass detected, skipping middleware checks')
       return res
     }
     
-    // Check if the pathname matches any auth callback route
+    // REDIRECT LOOP DETECTION: Check for too many redirects
+    const redirectCount = parseInt(request.cookies.get('redirect_count')?.value || '0')
+    if (redirectCount > 3) {
+      // Too many redirects, clear cookies and go to login with error
+      if (DEBUG_AUTH) console.log('Too many redirects detected, breaking loop')
+      const response = NextResponse.redirect(new URL('/dashboard/login?error=too_many_redirects', request.url))
+      response.cookies.set('redirect_count', '0')
+      return response
+    }
+    
+    // Create Supabase client
+    const supabase = createMiddlewareClient({ req: request, res })
+    
+    // PATH TYPE DETECTION: Determine what kind of route we're on
     const isAuthCallbackRoute = authCallbackRoutes.some(route => 
       request.nextUrl.pathname.startsWith(route)
     )
     
-    // If it's an auth callback route, let it proceed
-    if (isAuthCallbackRoute) {
+    // Skip middleware for auth callback routes
+    if (isAuthCallbackRoute || request.nextUrl.searchParams.has('code')) {
       if (DEBUG_AUTH) console.log('Auth callback route detected, skipping middleware')
       return res
     }
     
-    // Check if the pathname matches any protected route pattern
     const isProtectedRoute = protectedRoutes.some(route => 
       request.nextUrl.pathname.startsWith(route)
     )
     
-    // Check if the pathname is an auth route
     const isAuthRoute = authRoutes.some(route => 
       request.nextUrl.pathname.startsWith(route)
     )
     
-    // We don't need to check non-protected and non-auth routes
+    // Skip middleware for non-protected and non-auth routes
     if (!isProtectedRoute && !isAuthRoute) {
       return res
     }
     
-    // Get the session - check if user is authenticated
-    // We refresh the session first to ensure it's valid
-    const { data: sessionData } = await supabase.auth.getSession()
-    const session = sessionData.session
+    // SESSION VALIDATION: Get and validate the session
+    const { data } = await supabase.auth.getSession()
+    const session = data?.session
     
     if (DEBUG_AUTH) {
       console.log(`Path: ${request.nextUrl.pathname}`)
       console.log(`Is authenticated: ${!!session}`)
-      console.log(`Session expires: ${session?.expires_at ? new Date(session.expires_at * 1000).toISOString() : 'No session'}`)
+      if (session) {
+        const expiresAt = session.expires_at ? new Date(session.expires_at * 1000) : 'No expiry'
+        console.log(`Session expires: ${expiresAt}`)
+        console.log(`User ID: ${session.user.id}`)
+      }
     }
     
-    // Handle auth routes (login, register, etc.)
+    // AUTH ROUTE HANDLING: Routes like login, register, etc.
     if (isAuthRoute) {
-      // If authenticated and trying to access auth routes, redirect to dashboard
       if (session) {
-        if (DEBUG_AUTH) console.log('User is authenticated, redirecting to dashboard')
+        // User is already logged in, redirect to dashboard
+        if (DEBUG_AUTH) console.log('User is authenticated, redirecting from auth route to dashboard')
         return NextResponse.redirect(new URL('/dashboard', request.url))
       }
-      // Otherwise, allow access to auth routes
+      // Not logged in, allow access to auth routes
       return res
     }
     
-    // Handle protected routes
+    // PROTECTED ROUTE HANDLING: Routes that require authentication
     if (isProtectedRoute) {
-      // If not authenticated, redirect to login with the current URL as redirect
       if (!session) {
+        // Not authenticated, redirect to login
         if (DEBUG_AUTH) console.log('User is not authenticated, redirecting to login')
         
-        // Prevent redirect loops by checking for multiple redirects
-        if (request.nextUrl.searchParams.has('redirect')) {
-          // Already being redirected, add a bypass flag to break potential loops
-          const loginUrl = new URL('/dashboard/login', request.url)
-          loginUrl.searchParams.set('bypass_auth', 'true')
-          return NextResponse.redirect(loginUrl)
-        }
-        
-        const redirectUrl = new URL('/dashboard/login', request.url)
-        redirectUrl.searchParams.set('redirect', request.nextUrl.pathname)
-        return NextResponse.redirect(redirectUrl)
+        // Increment redirect counter to detect loops
+        const loginRedirect = NextResponse.redirect(
+          new URL(`/dashboard/login?redirect=${encodeURIComponent(request.nextUrl.pathname)}`, request.url)
+        )
+        loginRedirect.cookies.set('redirect_count', (redirectCount + 1).toString())
+        return loginRedirect
       }
       
-      // Check if profile is complete for routes that require it
-      if (session && request.nextUrl.pathname !== '/dashboard/profile-setup') {
+      // User is authenticated, check if profile is complete
+      if (request.nextUrl.pathname !== '/dashboard/profile-setup') {
         try {
-          // Check if user has a username
           const { data: profile, error } = await supabase
             .from('profiles')
             .select('username')
@@ -140,7 +132,7 @@ export async function middleware(request: NextRequest) {
           
           if (error) {
             if (DEBUG_AUTH) console.log('Error fetching profile:', error)
-            // If there's an error fetching the profile, still allow access
+            // Error fetching profile, still allow access to avoid redirect loops
             return res
           }
           
@@ -149,24 +141,26 @@ export async function middleware(request: NextRequest) {
             return NextResponse.redirect(new URL('/dashboard/profile-setup', request.url))
           }
         } catch (error) {
-          if (DEBUG_AUTH) console.log('Exception in profile check:', error)
-          // If there's an exception, still allow access
+          console.error('Exception checking profile:', error)
+          // Exception occurred, still allow access
           return res
         }
       }
       
-      // If authenticated, allow access to protected routes
+      // Authentication and profile checks passed, allow access
+      if (DEBUG_AUTH) console.log('Auth checks passed, allowing access to protected route')
+      
+      // Reset redirect count since we're not redirecting
+      res.cookies.set('redirect_count', '0')
       return res
     }
   } catch (error) {
-    console.error('Middleware error:', error)
+    console.error('Middleware exception:', error)
     
-    // In case of an error, we'll redirect to login but with a bypass flag
-    // to prevent an infinite loop if the error persists
-    const fallbackUrl = new URL('/dashboard/login', request.url)
-    fallbackUrl.searchParams.set('bypass_auth', 'true')
-    fallbackUrl.searchParams.set('error', 'auth_error')
-    return NextResponse.redirect(fallbackUrl)
+    // Emergency fallback to prevent the site from breaking
+    const response = NextResponse.redirect(new URL('/dashboard/login?error=middleware_error', request.url))
+    response.cookies.set('redirect_count', '0') // Reset redirect count
+    return response
   }
   
   return res

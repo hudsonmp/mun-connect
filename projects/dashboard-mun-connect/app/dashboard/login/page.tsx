@@ -19,8 +19,11 @@ import {
 } from "../../../components/ui/form"
 import { Input } from "../../../components/ui/input"
 import { useToast } from "../../../components/ui/use-toast"
-import { Loader2 } from "lucide-react"
+import { Loader2, AlertCircle } from "lucide-react"
 import { DashboardHeader } from "../../../components/dashboard/dashboard-header"
+
+// Debug flag
+const DEBUG_AUTH = true
 
 const formSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address" }),
@@ -34,30 +37,38 @@ function LoginForm() {
   const searchParams = useSearchParams()
   const redirectPath = searchParams.get('redirect') || '/dashboard'
   const authError = searchParams.get('error')
+  const errorDescription = searchParams.get('error_description')
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [loginAttempts, setLoginAttempts] = useState(0)
+  const [authErrorState, setAuthErrorState] = useState<string | null>(null)
 
   // If already authenticated, redirect to the specified path
   useEffect(() => {
     if (!isLoading && user) {
-      console.log("User authenticated, redirecting to:", redirectPath)
-      router.push(redirectPath)
+      if (DEBUG_AUTH) console.log("User authenticated, redirecting to:", redirectPath)
+      
+      // Use window.location for a full page reload to ensure session is picked up
+      window.location.href = redirectPath
     }
-  }, [user, isLoading, router, redirectPath])
+  }, [user, isLoading, redirectPath])
 
   // Show error message if there's an auth error in URL
   useEffect(() => {
     if (authError) {
-      let errorMessage = "Authentication error occurred. Please try again."
+      let errorMessage = errorDescription || "Authentication error occurred. Please try again."
       
-      if (authError === 'auth_error') {
-        errorMessage = "There was a problem with your authentication. Please try logging in again."
-      } else if (authError === 'auth_exception') {
-        errorMessage = "An unexpected error occurred. Please try again later."
-      } else if (authError === 'session_expired') {
-        errorMessage = "Your session has expired. Please log in again."
+      if (authError === 'session_error') {
+        errorMessage = "There was a problem with your session. Please try logging in again."
+      } else if (authError === 'callback_exception') {
+        errorMessage = "An unexpected error occurred during authentication. Please try again later."
+      } else if (authError === 'too_many_redirects') {
+        errorMessage = "Too many redirects occurred. This could be due to cookie issues."
+      } else if (authError === 'middleware_error') {
+        errorMessage = "An error occurred in the authentication middleware."
       }
+      
+      setAuthErrorState(errorMessage)
       
       toast({
         variant: "destructive",
@@ -65,7 +76,7 @@ function LoginForm() {
         description: errorMessage,
       })
     }
-  }, [authError, toast])
+  }, [authError, errorDescription, toast])
 
   // Check localStorage for existing auth state
   useEffect(() => {
@@ -80,19 +91,29 @@ function LoginForm() {
           
           // If auth state is less than 24 hours old, try to restore the session
           if (hoursSinceUpdate < 24 && authState.isAuthenticated) {
-            console.log("Found recent auth state, attempting to restore session")
-            // Attempt to refresh the session
-            if (typeof supabase !== 'undefined') {
-              supabase.auth.getSession().then(({ data, error }) => {
-                if (!error && data.session) {
-                  console.log("Session restored successfully")
-                  router.push(redirectPath)
-                } else {
-                  console.log("Could not restore session:", error)
-                  localStorage.removeItem('authState')
-                }
-              })
-            }
+            if (DEBUG_AUTH) console.log("Found recent auth state, attempting to restore session")
+            
+            // Try to get an active session
+            supabase.auth.getSession().then(({ data, error }) => {
+              if (!error && data.session) {
+                if (DEBUG_AUTH) console.log("Session restored successfully")
+                
+                // Set session explicitly
+                supabase.auth.setSession({
+                  access_token: data.session.access_token,
+                  refresh_token: data.session.refresh_token,
+                }).then(() => {
+                  // Use window.location for full page reload
+                  window.location.href = redirectPath
+                })
+              } else {
+                if (DEBUG_AUTH) console.log("Could not restore session:", error)
+                localStorage.removeItem('authState')
+              }
+            })
+          } else {
+            // Auth state is too old
+            localStorage.removeItem('authState')
           }
         } catch (e) {
           console.error("Error parsing auth state:", e)
@@ -100,7 +121,7 @@ function LoginForm() {
         }
       }
     }
-  }, [isLoading, user, router, redirectPath])
+  }, [isLoading, user, redirectPath])
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -113,17 +134,22 @@ function LoginForm() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSubmitting(true)
     setLoginAttempts(prev => prev + 1)
+    setAuthErrorState(null)
     
     try {
-      console.log("Attempting to sign in user:", values.email)
+      if (DEBUG_AUTH) console.log("Attempting to sign in user:", values.email)
       const { error, data } = await signIn(values.email, values.password)
       
       if (error) {
-        console.error("Sign in error:", error)
+        if (DEBUG_AUTH) console.error("Sign in error:", error)
+        
+        const errorMessage = error.message || "Please check your credentials and try again."
+        setAuthErrorState(errorMessage)
+        
         toast({
           variant: "destructive",
           title: "Login failed",
-          description: error.message || "Please check your credentials and try again.",
+          description: errorMessage,
         })
         
         // If we've tried multiple times, suggest password reset
@@ -132,7 +158,7 @@ function LoginForm() {
             title: "Trouble logging in?",
             description: (
               <div>
-                <p>You can <a href="/dashboard/forgot-password" className="underline text-blue-600">reset your password</a> if needed.</p>
+                <p>You can <Link href="/dashboard/forgot-password" className="underline text-blue-600">reset your password</Link> if needed.</p>
               </div>
             ),
           })
@@ -142,7 +168,7 @@ function LoginForm() {
       }
       
       if (data?.session) {
-        console.log("Login successful, redirecting to:", redirectPath)
+        if (DEBUG_AUTH) console.log("Login successful, redirecting to:", redirectPath)
         
         toast({
           title: "Login successful",
@@ -150,14 +176,12 @@ function LoginForm() {
         })
         
         // Force reload the page to ensure session is picked up
-        if (typeof window !== 'undefined') {
-          window.location.href = redirectPath
-        } else {
-          // Fallback if window is not available
-          router.push(redirectPath)
-        }
+        window.location.href = redirectPath
       } else {
-        console.log("No session returned after login")
+        if (DEBUG_AUTH) console.log("No session returned after login")
+        
+        setAuthErrorState("Logged in but no session was created. Please try again.")
+        
         toast({
           variant: "destructive",
           title: "Login issue",
@@ -166,6 +190,8 @@ function LoginForm() {
       }
     } catch (error) {
       console.error("Exception during login:", error)
+      setAuthErrorState("An unexpected error occurred. Please try again later.")
+      
       toast({
         variant: "destructive",
         title: "Something went wrong",
@@ -187,6 +213,22 @@ function LoginForm() {
             Sign in to your MUN Connect account
           </p>
         </div>
+
+        {authErrorState && (
+          <div className="p-4 mb-4 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
+            <div className="flex items-start">
+              <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 mr-2" />
+              <div>
+                <p className="text-sm font-medium text-red-800 dark:text-red-300">
+                  Authentication error
+                </p>
+                <p className="mt-1 text-sm text-red-700 dark:text-red-400">
+                  {authErrorState}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -240,6 +282,23 @@ function LoginForm() {
                 "Sign in"
               )}
             </Button>
+            
+            <div className="flex items-center justify-between text-sm">
+              <Link 
+                href="/dashboard/forgot-password" 
+                className="text-blue-600 hover:underline dark:text-blue-400"
+              >
+                Forgot password?
+              </Link>
+              
+              <button 
+                type="button"
+                onClick={() => window.location.href = redirectPath + '?_auth_bypass=true'}
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 text-xs"
+              >
+                Bypass Auth (Debug)
+              </button>
+            </div>
           </form>
         </Form>
 
