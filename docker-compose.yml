@@ -1,0 +1,75 @@
+services:
+  app:
+    image: node:18-alpine
+    container_name: nextjs_app
+    working_dir: /app
+    command: sh -c "cp /app/.env.local /app/.env && npm install && npm run dev"
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_SUPABASE_URL: "https://yfksapziqxrgfrmflnnn.supabase.co"
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlma3NhcHppcXhyZ2ZybWZsbm5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDE0OTk4MjIsImV4cCI6MjA1NzA3NTgyMn0.KXYgRbm0VIlbIMJ82UfEoR3Bq_hQiUUNGQuvQJK2azg"
+      SUPABASE_SERVICE_ROLE_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlma3NhcHppcXhyZ2ZybWZsbm5uIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MTQ5OTgyMiwiZXhwIjoyMDU3MDc1ODIyfQ.4TJLZKaUIQi_GRDYB9BN5kHy7cx0SllvbJOGn38LSqU"
+      NEXT_PUBLIC_SITE_URL: "http://localhost:3000"
+      NEXT_PUBLIC_REDIRECT_URL: "http://localhost:3000/dashboard"
+      POSTGRES_URL: "postgresql://postgres.yfksapziqxrgfrmflnnn:uNKSqj5gKYdqJxCW@aws-0-us-west-1.pooler.supabase.com:5432/postgres"
+      POSTGRES_URL_NON_POOLING: "postgresql://postgres.yfksapziqxrgfrmflnnn:uNKSqj5gKYdqJxCW@aws-0-us-west-1.pooler.supabase.com:5432/postgres"
+      POSTGRES_PRISMA_URL: "postgresql://postgres.yfksapziqxrgfrmflnnn:uNKSqj5gKYdqJxCW@aws-0-us-west-1.pooler.supabase.com:5432/postgres"
+      NODE_ENV: "development"
+    depends_on:
+      - supabase_db
+    volumes:
+      - ./:/app # Mount the entire mun-connect directory
+
+  supabase_db:
+    image: "${SUPABASE_IMAGE}"
+    container_name: supabase_postgres
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      POSTGRES_DB: "${POSTGRES_DATABASE}"
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  mcp_server:
+    image: node:18-alpine
+    container_name: mcp_server
+    working_dir: /app
+    command: sh -c "npm install -g @modelcontextprotocol/server-postgres && npx @modelcontextprotocol/server-postgres \"postgresql://postgres.yfksapziqxrgfrmflnnn:uNKSqj5gKYdqJxCW@aws-0-us-west-1.pooler.supabase.com:5432/postgres\" --api-key=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlma3NhcHppcXhyZ2ZybWZsbm5uIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MTQ5OTgyMiwiZXhwIjoyMDU3MDc1ODIyfQ.4TJLZKaUIQi_GRDYB9BN5kHy7cx0SllvbJOGn38LSqU\" --port=8080 && tail -f /dev/null"
+    environment:
+      NEXT_PUBLIC_SUPABASE_URL: "https://yfksapziqxrgfrmflnnn.supabase.co"
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlma3NhcHppcXhyZ2ZybWZsbm5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDE0OTk4MjIsImV4cCI6MjA1NzA3NTgyMn0.KXYgRbm0VIlbIMJ82UfEoR3Bq_hQiUUNGQuvQJK2azg"
+      SUPABASE_SERVICE_ROLE_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlma3NhcHppcXhyZ2ZybWZsbm5uIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MTQ5OTgyMiwiZXhwIjoyMDU3MDc1ODIyfQ.4TJLZKaUIQi_GRDYB9BN5kHy7cx0SllvbJOGn38LSqU"
+      NEXT_PUBLIC_SITE_URL: "http://localhost:3000"
+      NEXT_PUBLIC_REDIRECT_URL: "http://localhost:3000/dashboard"
+      POSTGRES_URL: "postgresql://postgres.yfksapziqxrgfrmflnnn:uNKSqj5gKYdqJxCW@aws-0-us-west-1.pooler.supabase.com:5432/postgres"
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "postgres"
+      POSTGRES_DATABASE: "postgres"
+      MCP_DEBUG: "true"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./:/app
+    depends_on:
+      - supabase_db
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: "${PGADMIN_DEFAULT_EMAIL}"
+      PGADMIN_DEFAULT_PASSWORD: "${PGADMIN_DEFAULT_PASSWORD}"
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - supabase_db
+
+volumes:
+  pg_data:
+  pgadmin_data: 

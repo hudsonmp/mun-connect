@@ -43,8 +43,13 @@ export const supabaseAdmin = createClient<Database>(
 // Create Supabase client with the newer approach 
 export const supabase = typeof window !== 'undefined' 
   ? createClientComponentClient<Database>({
+      supabaseUrl: supabaseUrl,
+      supabaseKey: supabaseAnonKey,
       cookieOptions: {
         name: 'supabase-auth',
+        path: '/',
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production'
       }
     })
   : supabaseAdmin // Fallback for server contexts
