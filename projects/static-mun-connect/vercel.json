@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "outputDirectory": ".next",
+  "regions": ["sfo1"],
+  "rewrites": [
+    {
+      "source": "/dashboard/:path*",
+      "destination": "https://dashboard.munconnect.org/dashboard/:path*"
+    }
+  ]
+} 

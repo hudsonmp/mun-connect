@@ -1,62 +1,68 @@
 # MUN Connect
 
-MUN Connect is an AI-powered platform for Model UN participants, helping them prepare, research, and connect with other delegates.
+MUN Connect is a modern AI-powered Model UN platform targeting Gen Z users with research, writing, conference management, and networking features.
 
-## Project Setup
+## Project Structure
 
-### Database Setup
+This repository has been reorganized into two separate Next.js applications that are deployed independently on Vercel:
 
-The project uses Supabase as the database with the following setup:
+1. **Static Site** (`projects/static-mun-connect/`): Contains the landing page and public content
+2. **Dashboard Application** (`projects/dashboard-mun-connect/`): Contains the authenticated dashboard and all app functionality
 
-1. **Profiles Table**: Stores user profile information
-   - `id`: UUID (Primary key, references auth.users)
-   - `username`: Text (Unique, Not Null)
-   - `full_name`: Text
-   - `bio`: Text
-   - `avatar_url`: Text
-   - `created_at`: Timestamp with timezone (Default: now())
-   - `updated_at`: Timestamp with timezone (Default: now())
+## Getting Started
 
-2. **Security Features**:
-   - Row Level Security (RLS) enabled on the profiles table
-   - Policies to ensure users can only view, update, and insert their own profiles
-   - Automatic updating of the `updated_at` field via a trigger
+To work with either project, navigate to its directory:
 
-### Development
+```bash
+# For the static site
+cd projects/static-mun-connect
+npm install
+npm run dev
 
-1. **Prerequisites**:
-   - Node.js (>= 18.0.0)
-   - npm (>= 10.2.4)
-   - Supabase account
+# For the dashboard application
+cd projects/dashboard-mun-connect
+npm install
+npm run dev
+```
 
-2. **Setup**:
-   ```bash
-   npm install
-   ```
+## Deployment
 
-3. **Run Development Server**:
-   ```bash
-   npm run dev
-   # or
-   npx vercel dev
-   ```
+You can deploy both projects using the provided script:
 
-4. **Build for Production**:
-   ```bash
-   npm run build
-   ```
+```bash
+./deploy-projects.sh
+```
 
-## Frontend Structure
+Or deploy them individually:
 
-The project uses Next.js 14+ with the App Router, TypeScript, and Shadcn UI components.
+```bash
+# For the static site
+cd projects/static-mun-connect
+vercel --prod
 
-## Authentication
+# For the dashboard application
+cd projects/dashboard-mun-connect
+vercel --prod
+```
 
-Authentication is managed through Supabase, with a custom user profiles system that integrates with Supabase Auth.
+## Environment Variables
 
-## Development Guidelines
+Make sure to set up the appropriate environment variables in each Vercel project:
 
-- Follow Next.js best practices
-- Use TypeScript for type safety
-- Implement proper error handling
-- Follow mobile-first responsive design principles 
+### Dashboard Application
+- `NEXT_PUBLIC_SUPABASE_URL`: Your Supabase project URL
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Your Supabase anonymous key
+
+## Domain Configuration
+
+In Vercel, configure:
+- The static site to use `munconnect.org`
+- The dashboard to use `dashboard.munconnect.org`
+
+## More Information
+
+For more details about each project, see the README files in their respective directories:
+
+- [Static Site README](./projects/static-mun-connect/README.md)
+- [Dashboard Application README](./projects/dashboard-mun-connect/README.md)
+- [Project Structure README](./projects/README.md) 

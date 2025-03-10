@@ -1,0 +1,106 @@
+---
+description: Frontend development
+globs: *.tsx,*Next.js,*.js,*.json
+alwaysApply: false
+---
+# MUN Connect Frontend Development Guide
+
+## Project Overview
+* Modern AI-powered Model UN platform targeting Gen Z users
+* Sleek interfaces, animations, and gradient backgrounds
+* Mobile-first responsive design
+* Focus on four core features: Write, Research, At Conference, and Network
+
+## Frontend Stack
+* **Framework**: Next.js 14 with App Router
+* **Language**: TypeScript
+* **Components**: Shadcn UI, Radix UI
+* **Styling**: Tailwind CSS
+* **Animation**: Framer Motion
+* **Form Handling**: React Hook Form with Zod validation
+* **AI Integration**: Vercel AI SDK with OpenAI/Anthropic
+
+## Coding Standards
+* Use function keyword for component declarations
+* Implement TypeScript interfaces for all props and data structures
+* Place types at the end of each file
+* Use named exports for all components
+* Follow mobile-first responsive design principles
+* Implement proper error handling with early returns
+* Use React Server Components wherever possible
+* Keep client components minimal and focused on interaction only
+* Place static content variables outside render functions
+
+## Feature Implementation Strategy
+* Build one feature at a time from start to finish
+* Order of implementation:
+  * Static landing page with waitlist
+  * Dashboard layout and navigation
+  * Document repository
+  * AI research assistant
+  * Speech writer
+  * Conference management
+  * Network features
+* After completing each frontend feature, immediately implement its backend counterpart
+* Test each feature thoroughly before moving to the next
+* Deploy after each major feature is completed
+
+## Page Connection and Routing
+* Use the App Router's folder-based routing system
+* Organize routes in logical groups:
+  * `app/` - Static pages (landing, about, features)
+  * `app/(dashboard)/` - Protected dashboard routes
+  * `app/(auth)/` - Authentication routes
+* Connect pages through:
+  * Navigation components (sidebar, header)
+  * Direct links to routes
+  * Programmatic navigation using router.push()
+* Create page segments that can be reused across the application
+* Implement layout components that wrap multiple pages
+* Use loading.tsx and error.tsx for proper loading states and error handling
+
+## Component Development
+* Create components in a separate components directory
+* Group components by feature or page
+* Make components as modular and reusable as possible
+* Implement proper loading, error, and empty states for all components
+* Use Suspense boundaries for asynchronous components
+* Prioritize accessibility in all components
+
+## State Management and Data Flow
+* Use React Server Components for data fetching
+* Keep client-side state minimal
+* Implement optimistic updates for better UX
+* Use form state management with React Hook Form
+* Prefer server actions over client-side API calls
+
+## Frontend-Backend Coordination
+* After implementing a frontend feature, immediately update the backend
+* Test the full feature flow before moving to the next feature
+* Ensure types are consistent between frontend and backend
+* Create backend API endpoints as needed for each frontend feature
+* Use typed responses for all API calls
+
+## Design System
+* Use Shadcn UI as the foundation
+* Implement consistent spacing, typography, and color systems
+* Create gradient backgrounds for key sections
+* Use animations sparingly but effectively (page transitions, hover states)
+* Ensure contrast ratios meet accessibility standards
+* Design for mobile first, then enhance for larger screens
+
+## Development Workflow
+* Create a feature branch for each new feature
+* Implement the frontend UI first
+* Add interactivity and state management
+* Connect to backend APIs and data
+* Test thoroughly on multiple devices
+* Request review before merging
+* Deploy incrementally after completing major features
+
+## Performance Considerations
+* Optimize images with appropriate formats and sizes
+* Implement code splitting for large components
+* Use next/image for automatic image optimization
+* Minimize client-side JavaScript
+* Implement proper loading states for better perceived performance
