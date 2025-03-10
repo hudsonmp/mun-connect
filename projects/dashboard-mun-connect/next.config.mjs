@@ -9,10 +9,6 @@ const nextConfig = {
     // Allow production builds to complete even with ESLint errors
     ignoreDuringBuilds: true,
   },
-  experimental: {
-    // Handle packages that need to be external
-    serverComponentsExternalPackages: ['@supabase/supabase-js']
-  },
   images: {
     remotePatterns: [
       {
@@ -28,6 +24,8 @@ const nextConfig = {
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     DEPLOYMENT_TARGET: 'dashboard',
+    NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL || 'https://mun-connect-dashboard.vercel.app',
+    NEXT_PUBLIC_STATIC_SITE_URL: process.env.NEXT_PUBLIC_STATIC_SITE_URL || 'https://mun-connect.vercel.app',
   },
   // Configure redirects from the root to the dashboard 
   async redirects() {

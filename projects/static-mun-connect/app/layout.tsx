@@ -17,6 +17,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "MUN Connect - AI-Powered Model UN Platform",
   description: "Modern AI-powered Model UN platform targeting Gen Z users with research, writing, conference management, and networking features.",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://munconnect.vercel.app'),
 };
 
 export default function RootLayout({

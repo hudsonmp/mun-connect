@@ -11,8 +11,8 @@ export function LandingHeader() {
   const router = useRouter()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   
-  // Dashboard URL - change this to your actual dashboard domain
-  const dashboardUrl = "https://dashboard.munconnect.org"
+  // Dashboard URL - this should be configurable based on environment
+  const dashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL || "https://mun-connect-dashboard.vercel.app"
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">

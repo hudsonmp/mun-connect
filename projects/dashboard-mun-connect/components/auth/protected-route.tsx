@@ -14,7 +14,7 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({
   children,
   requireProfileComplete = false,
-  redirectTo = "/login",
+  redirectTo = "/dashboard/login",
 }: ProtectedRouteProps) {
   const { user, isLoading, isProfileComplete, refreshSession } = useAuth()
   const router = useRouter()
@@ -42,7 +42,7 @@ export function ProtectedRoute({
         setTimeout(() => {
           // Add redirect parameter to return to this page after login
           const currentPath = pathname
-          const redirectPath = `${redirectTo}?redirect=${encodeURIComponent(currentPath)}`
+          const redirectPath = `${redirectTo}?redirect=${encodeURIComponent(currentPath || '')}`
           router.push(redirectPath)
         }, 100)
       }
@@ -78,6 +78,5 @@ export function ProtectedRoute({
   }
 
   // Render children directly - no additional checks needed
-  // Users will be directed to dashboard regardless of auth/profile status
   return <>{children}</>
 } 
