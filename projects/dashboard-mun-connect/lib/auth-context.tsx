@@ -204,43 +204,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       if (DEBUG_AUTH) console.log('Signing in user:', email)
       
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email,
-          password,
-        }),
+      // Use Supabase's built-in signIn instead of custom API
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       })
       
-      const data = await handleApiResponse(response)
-      
-      // Store tokens
-      localStorage.setItem('access_token', data.tokens.access_token)
-      localStorage.setItem('refresh_token', data.tokens.refresh_token)
-      
-      setUser(data.user)
-      setSession({
-        access_token: data.tokens.access_token,
-        refresh_token: data.tokens.refresh_token,
-      } as Session)
-      setIsProfileComplete(!!data.user.username)
-      
-      // Handle redirect after successful login
-      const params = new URLSearchParams(window.location.search)
-      const redirectPath = params.get('redirect')
-      
-      if (redirectPath) {
-        router.push(redirectPath)
-      } else if (!data.user.username) {
-        router.push('/dashboard/profile-setup')
-      } else {
-        router.push('/dashboard/dashboard')
+      if (authError) {
+        console.error('Auth error:', authError)
+        return { error: authError, data: null }
       }
       
-      return { error: null, data }
+      if (!authData.session) {
+        console.error('No session returned from signIn')
+        return { error: new Error('No session returned from signIn'), data: null }
+      }
+      
+      // Set the session in Supabase client
+      await supabase.auth.setSession({
+        access_token: authData.session.access_token,
+        refresh_token: authData.session.refresh_token,
+      })
+      
+      setUser(authData.user)
+      setSession(authData.session)
+      
+      // Store minimal auth state in localStorage
+      localStorage.setItem('authState', JSON.stringify({
+        isAuthenticated: true,
+        userId: authData.user.id,
+        hasSupabaseAuth: true,
+        lastUpdated: new Date().toISOString()
+      }))
+      
+      // Check if profile is complete
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('id', authData.user.id)
+        .single()
+      
+      setIsProfileComplete(!!profile?.username)
+      
+      // Handle redirect
+      const params = new URLSearchParams(window.location.search)
+      const redirectPath = params.get('redirect') || '/dashboard'
+      
+      if (!profile?.username) {
+        router.push('/dashboard/profile-setup')
+      } else {
+        router.push(redirectPath)
+      }
+      
+      return { error: null, data: authData }
     } catch (error) {
       console.error('Exception in signIn:', error)
       return { error: error instanceof Error ? error.message : 'An error occurred during sign in', data: null }

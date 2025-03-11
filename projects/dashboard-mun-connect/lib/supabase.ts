@@ -104,8 +104,7 @@ const authConfig = {
     persistSession: true,
     detectSessionInUrl: true,
     storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-    storageKey: 'supabase-auth',
-    redirectTo: typeof window !== 'undefined' ? `${window.location.origin}${redirectUrl}` : undefined
+    storageKey: 'supabase.auth.token'
   },
   global: {
     fetch: customFetch
@@ -125,16 +124,11 @@ export const supabase = typeof window !== 'undefined'
       supabaseUrl: supabaseUrl,
       supabaseKey: supabaseAnonKey,
       cookieOptions: {
-        name: 'supabase-auth',
+        name: 'sb-auth-token',
+        domain: '',
         path: '/',
         sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-      },
-      // Custom options need to be passed differently for createClientComponentClient
-      options: {
-        global: {
-          fetch: customFetch
-        }
+        secure: process.env.NODE_ENV === 'production'
       }
     })
   : supabaseAdmin
