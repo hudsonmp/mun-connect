@@ -54,6 +54,22 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+// Helper function to handle API responses
+async function handleApiResponse(response: Response) {
+  const data = await response.json()
+  
+  if (!response.ok) {
+    // If the response contains an error message, use it
+    if (data?.error) {
+      throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error))
+    }
+    // Otherwise, throw a generic error with the status
+    throw new Error(`Request failed with status ${response.status}`)
+  }
+  
+  return data
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
@@ -99,11 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         },
       })
       
-      if (!response.ok) {
-        throw new Error('Failed to refresh token')
-      }
-      
-      const data = await response.json()
+      const data = await handleApiResponse(response)
       localStorage.setItem('access_token', data.access_token)
       
       // Get user data with new token
@@ -113,11 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         },
       })
       
-      if (!userResponse.ok) {
-        throw new Error('Failed to get user data')
-      }
-      
-      const userData = await userResponse.json()
+      const userData = await handleApiResponse(userResponse)
       setUser(userData)
       setSession({ access_token: data.access_token, refresh_token: refreshToken } as Session)
       setIsProfileComplete(!!userData.username)
@@ -170,11 +178,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }),
       })
       
-      const data = await response.json()
-      
-      if (!response.ok) {
-        return { error: data, data: null }
-      }
+      const data = await handleApiResponse(response)
       
       // Store tokens
       localStorage.setItem('access_token', data.tokens.access_token)
@@ -191,7 +195,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: null, data }
     } catch (error) {
       console.error('Exception in signUp:', error)
-      return { error, data: null }
+      return { error: error instanceof Error ? error.message : 'An error occurred during signup', data: null }
     }
   }
 
@@ -211,11 +215,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }),
       })
       
-      const data = await response.json()
-      
-      if (!response.ok) {
-        return { error: data, data: null }
-      }
+      const data = await handleApiResponse(response)
       
       // Store tokens
       localStorage.setItem('access_token', data.tokens.access_token)
@@ -243,7 +243,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: null, data }
     } catch (error) {
       console.error('Exception in signIn:', error)
-      return { error, data: null }
+      return { error: error instanceof Error ? error.message : 'An error occurred during sign in', data: null }
     }
   }
 
@@ -268,12 +268,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  // Function to update user profile
+  // Function to update user profile with better error handling
   const updateProfile = async (profileData: any) => {
     try {
       const accessToken = localStorage.getItem('access_token')
       if (!accessToken) {
-        return { error: { message: 'No user logged in' }, data: null }
+        return { error: 'No user logged in', data: null }
       }
 
       const response = await fetch('/api/auth/me', {
@@ -285,11 +285,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify(profileData),
       })
 
-      const data = await response.json()
-      
-      if (!response.ok) {
-        return { error: data, data: null }
-      }
+      const data = await handleApiResponse(response)
 
       // Update the profile completion status
       if (data?.username) {
@@ -299,7 +295,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: null, data }
     } catch (error) {
       console.error('Error updating profile:', error)
-      return { error, data: null }
+      return { error: error instanceof Error ? error.message : 'An error occurred while updating profile', data: null }
     }
   }
 
