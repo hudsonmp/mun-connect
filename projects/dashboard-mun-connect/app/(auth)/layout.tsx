@@ -4,6 +4,10 @@ import React, { useEffect } from "react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
 import { useAuth } from "../../lib/auth-context"
+import { Toaster } from "../../components/ui/toaster"
+
+// Base path from next.config
+const BASE_PATH = '/dashboard'
 
 export default function AuthLayout({
   children,
@@ -14,6 +18,11 @@ export default function AuthLayout({
   const router = useRouter()
   const pathname = usePathname()
 
+  // Debug path for troubleshooting
+  if (typeof window !== 'undefined') {
+    console.log('Current pathname in (auth) layout:', pathname)
+  }
+
   // Redirect to dashboard if already authenticated
   useEffect(() => {
     if (!isLoading && user) {
@@ -21,7 +30,9 @@ export default function AuthLayout({
       if (pathname === '/dashboard/profile-setup' && !user.username) {
         return
       }
-      router.push('/dashboard/dashboard')
+      
+      // Use properly formatted path with basePath
+      router.push('/dashboard')
     }
   }, [user, isLoading, router, pathname])
 
@@ -37,6 +48,7 @@ export default function AuthLayout({
         </header>
         <main>{children}</main>
       </div>
+      <Toaster />
     </div>
   )
 } 

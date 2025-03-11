@@ -5,13 +5,22 @@ import { usePathname } from "next/navigation"
 import { DashboardSidebar } from "../../components/dashboard/dashboard-sidebar"
 import { DashboardHeader } from "../../components/dashboard/dashboard-header"
 import { ProtectedRoute } from "../../components/auth/protected-route"
+import { Toaster } from "../../components/ui/toaster"
 
-export default function DashboardLayout({
+// Base path from next.config
+const BASE_PATH = '/dashboard'
+
+export default function DashboardGroupLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
   const pathname = usePathname()
+  
+  // Debug path for troubleshooting
+  if (typeof window !== 'undefined') {
+    console.log('Current pathname in (dashboard) layout:', pathname)
+  }
   
   return (
     <ProtectedRoute>
@@ -24,6 +33,7 @@ export default function DashboardLayout({
           </main>
         </div>
       </div>
+      <Toaster />
     </ProtectedRoute>
   )
 } 

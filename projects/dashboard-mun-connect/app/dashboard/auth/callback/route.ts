@@ -66,23 +66,28 @@ export async function GET(request: NextRequest) {
     // Create a Supabase client with server cookies
     const cookieStore = await cookies()
     
-    // Create the Supabase client
+    // Create the Supabase client - use simple cookie implementation to avoid type errors
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL || '',
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
       {
         cookies: {
-          get: async (name: string) => {
-            const cookieStore = await cookies()
-            const cookie = cookieStore.get(name)
-            return cookie?.value
+          get(name) {
+            return cookieStore.get(name)?.value
           },
-          set: (name: string, value: string, options: CookieOptions) => {
-            cookieStore.set(name, value, options as any)
+          set(name, value, options) {
+            try {
+              cookieStore.set(name, value, options as any)
+            } catch (error) {
+              console.error(`Error setting cookie ${name}:`, error)
+            }
           },
-          remove: async (name: string, options: CookieOptions) => {
-            const cookieStore = await cookies()
-            cookieStore.set(name, '', { ...options as any, maxAge: 0 })
+          remove(name, options) {
+            try {
+              cookieStore.set(name, '', { ...options as any, maxAge: 0 })
+            } catch (error) {
+              console.error(`Error removing cookie ${name}:`, error)
+            }
           },
         },
       }

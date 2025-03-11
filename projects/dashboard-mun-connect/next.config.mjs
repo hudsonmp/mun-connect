@@ -37,10 +37,22 @@ const nextConfig = {
         destination: '/dashboard',
         permanent: false,
       },
-      // Handle duplicate dashboard path
+      // Handle duplicate dashboard path in URL
       {
         source: '/dashboard/dashboard',
         destination: '/dashboard',
+        permanent: false,
+      },
+      // Handle duplicates for login path
+      {
+        source: '/dashboard/dashboard/login',
+        destination: '/dashboard/login',
+        permanent: false,
+      },
+      // Handle profile setup path duplication
+      {
+        source: '/dashboard/dashboard/profile-setup',
+        destination: '/dashboard/profile-setup',
         permanent: false,
       },
       // Handle possible auth callback paths

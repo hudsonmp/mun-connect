@@ -54,8 +54,16 @@ function LoginForm() {
         console.log('- Redirect path:', redirectPath)
       }
       
+      // Handle the redirect path properly with basePath
+      let finalRedirectPath = redirectPath;
+      
+      // If redirect doesn't start with /dashboard, add it
+      if (!finalRedirectPath.startsWith('/dashboard')) {
+        finalRedirectPath = `/dashboard${finalRedirectPath === '/' ? '' : finalRedirectPath}`;
+      }
+      
       // Use window.location for a full page reload to ensure session is picked up
-      window.location.href = redirectPath
+      window.location.href = finalRedirectPath;
     }
   }, [user, isLoading, redirectPath])
 

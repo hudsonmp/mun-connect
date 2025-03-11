@@ -21,6 +21,10 @@
         {
           "key": "Referrer-Policy",
           "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store, max-age=0"
         }
       ]
     }
@@ -30,10 +34,21 @@
       "source": "/",
       "destination": "/dashboard",
       "permanent": false
+    },
+    {
+      "source": "/dashboard/dashboard",
+      "destination": "/dashboard",
+      "permanent": false
+    },
+    {
+      "source": "/dashboard/dashboard/:path*",
+      "destination": "/dashboard/:path*",
+      "permanent": false
     }
   ],
   "env": {
     "NEXT_PUBLIC_SITE_URL": "https://mun-connect-dashboard.vercel.app",
-    "NEXT_PUBLIC_STATIC_SITE_URL": "https://mun-connect.vercel.app"
+    "NEXT_PUBLIC_STATIC_SITE_URL": "https://mun-connect.vercel.app",
+    "NEXT_PUBLIC_BASE_PATH": "/dashboard"
   }
 } 
