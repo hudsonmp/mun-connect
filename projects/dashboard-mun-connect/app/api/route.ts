@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+// Mark as dynamic to ensure we don't cache the auth response
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     // Log environment variables

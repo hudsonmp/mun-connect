@@ -1,4 +1,4 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -64,8 +64,29 @@ export async function GET(request: NextRequest) {
     if (DEBUG_AUTH) console.log('Exchanging code for session')
     
     // Create a Supabase client with server cookies
-    const cookieStore = cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+    const cookieStore = await cookies()
+    
+    // Create the Supabase client
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+      {
+        cookies: {
+          get: async (name: string) => {
+            const cookieStore = await cookies()
+            const cookie = cookieStore.get(name)
+            return cookie?.value
+          },
+          set: (name: string, value: string, options: CookieOptions) => {
+            cookieStore.set(name, value, options as any)
+          },
+          remove: async (name: string, options: CookieOptions) => {
+            const cookieStore = await cookies()
+            cookieStore.set(name, '', { ...options as any, maxAge: 0 })
+          },
+        },
+      }
+    )
     
     // Exchange the code for a session
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)

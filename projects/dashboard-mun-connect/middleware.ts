@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
 
 // Define protected route patterns
 const protectedRoutes = [
@@ -26,8 +26,9 @@ const authRoutes = [
 const authCallbackRoutes = [
   '/auth/callback',
   '/api/auth',
-  '/auth/confirm',
+  '/api/auth/callback',
   '/dashboard/auth/callback',
+  '/api', // Basic API routes
 ]
 
 // Debug flag - enable to log authentication flow details
@@ -73,7 +74,29 @@ export async function middleware(request: NextRequest) {
     }
     
     // Create Supabase client
-    const supabase = createMiddlewareClient({ req: request, res })
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+      {
+        cookies: {
+          get: (name) => request.cookies.get(name)?.value,
+          set: (name, value, options) => {
+            res.cookies.set({
+              name,
+              value,
+              ...options,
+            });
+          },
+          remove: (name, options) => {
+            res.cookies.set({
+              name,
+              value: '',
+              ...options,
+            });
+          },
+        },
+      }
+    )
     
     const isProtectedRoute = protectedRoutes.some(route => 
       request.nextUrl.pathname.startsWith(route)
