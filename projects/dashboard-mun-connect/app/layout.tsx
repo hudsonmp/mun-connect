@@ -1,11 +1,7 @@
-"use client"
-
 import type { ReactNode } from "react"
-import React from "react"
-import { AuthProvider } from "../lib/auth-context"
 import { Geist, Geist_Mono } from "next/font/google"
 import "./globals.css"
-import { Toaster } from "../components/ui/toaster"
+import { ClientLayout } from "../components/layout/client-layout"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -38,10 +34,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <AuthProvider>
-          {children}
-          <Toaster />
-        </AuthProvider>
+        <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
   )

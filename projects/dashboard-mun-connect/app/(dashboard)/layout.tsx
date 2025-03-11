@@ -5,16 +5,6 @@ import { usePathname } from "next/navigation"
 import { DashboardSidebar } from "../../components/dashboard/dashboard-sidebar"
 import { DashboardHeader } from "../../components/dashboard/dashboard-header"
 import { ProtectedRoute } from "../../components/auth/protected-route"
-import { Toaster } from "../../components/ui/toaster"
-
-// Debug flag
-const DEBUG_AUTH = true
-
-// Helper to check if a path is an auth route
-const isAuthPath = (path: string) => {
-  const authPaths = ['/login', '/register', '/auth/callback', '/profile-setup']
-  return authPaths.some(authPath => path.endsWith(authPath))
-}
 
 export default function DashboardLayout({
   children,
@@ -23,19 +13,8 @@ export default function DashboardLayout({
 }>) {
   const pathname = usePathname()
   
-  if (DEBUG_AUTH) {
-    console.log('Dashboard Layout rendering for path:', pathname)
-    console.log('Is auth route:', isAuthPath(pathname))
-  }
-  
-  // Don't apply dashboard layout to auth routes
-  if (isAuthPath(pathname)) {
-    return <>{children}</>
-  }
-  
-  // Apply protected route wrapper and dashboard layout to non-auth routes
   return (
-    <ProtectedRoute requireProfileComplete={true}>
+    <ProtectedRoute>
       <div className="min-h-screen flex flex-col">
         <DashboardHeader />
         <div className="flex-1 flex">
