@@ -140,6 +140,10 @@ export default function ProfileSetupPage() {
       // Update with selected interests
       values.interests = selectedInterests
 
+      if (!supabase) {
+        throw new Error("Supabase client is not initialized")
+      }
+
       const { error } = await supabase
         .from('profiles')
         .upsert({

@@ -128,7 +128,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     async function fetchProfile() {
-      if (!user) return
+      if (!user || !supabase) return
       
       try {
         console.log("Fetching profile data for user:", user.id)
@@ -243,6 +243,10 @@ export default function ProfilePage() {
         throw new Error('You must be logged in to upload an avatar.')
       }
       
+      if (!supabase) {
+        throw new Error('Supabase client is not initialized.')
+      }
+      
       const file = event.target.files[0]
       const fileExt = file.name.split('.').pop()?.toLowerCase()
       
@@ -333,6 +337,15 @@ export default function ProfilePage() {
         description: "Please sign in to update your profile.",
       })
       router.push("/login")
+      return
+    }
+
+    if (!supabase) {
+      toast({
+        variant: "destructive",
+        title: "Connection error",
+        description: "Cannot connect to the database. Please try again later.",
+      })
       return
     }
 

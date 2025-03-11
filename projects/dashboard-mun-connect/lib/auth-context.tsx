@@ -1,7 +1,7 @@
 "use client"
 
 import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from 'react'
-import { supabase } from './supabase'
+import { supabase, getSupabase } from './supabase'
 import { Session } from '@supabase/supabase-js'
 import { useRouter, usePathname } from 'next/navigation'
 import { User } from './types'
@@ -78,6 +78,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
   
+  // Get the Supabase client
+  const supabaseClient = typeof window !== 'undefined' ? getSupabase() : null;
+  
   // Refs for timers to allow cleanup
   const refreshTimerRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -150,49 +153,115 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Initialize auth state
   useEffect(() => {
-    refreshSession()
+    // Check if we have a Supabase client
+    if (!supabaseClient) {
+      console.error('Supabase client not available');
+      setIsLoading(false);
+      return;
+    }
+    
+    // Check for existing session
+    const initializeAuth = async () => {
+      try {
+        const { data, error } = await supabaseClient.auth.getSession();
+        if (error) {
+          console.error('Error getting session:', error);
+          setIsLoading(false);
+          return;
+        }
+        
+        if (data?.session) {
+          setSession(data.session);
+          setUser(data.session.user as User);
+          
+          // Check if profile is complete
+          const { data: profile } = await supabaseClient
+            .from('profiles')
+            .select('username')
+            .eq('id', data.session.user.id)
+            .single();
+            
+          setIsProfileComplete(!!profile?.username);
+        }
+      } catch (error) {
+        console.error('Error initializing auth:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    initializeAuth();
     
     // Set up refresh timer
     const REFRESH_INTERVAL = 14 * 60 * 1000 // 14 minutes
     refreshTimerRef.current = setInterval(refreshSession, REFRESH_INTERVAL)
     
-    return () => {
-      if (refreshTimerRef.current) clearInterval(refreshTimerRef.current)
+    // Set up auth state change listener
+    let authListener: any;
+    if (supabaseClient) {
+      authListener = supabaseClient.auth.onAuthStateChange((event, session) => {
+        if (DEBUG_AUTH) console.log('Auth state changed:', event);
+        
+        if (session) {
+          setSession(session);
+          setUser(session.user as User);
+        } else if (event === 'SIGNED_OUT') {
+          setSession(null);
+          setUser(null);
+        }
+      });
     }
-  }, [refreshSession])
+    
+    return () => {
+      if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
+      if (authListener) authListener.subscription.unsubscribe();
+    }
+  }, [refreshSession, supabaseClient])
 
   // Enhanced signup with proper profile creation
   const signUp = async (email: string, password: string, username: string) => {
     try {
       if (DEBUG_AUTH) console.log('Signing up user:', email)
       
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email,
-          password,
+      if (!supabaseClient) {
+        return { error: 'Supabase client not initialized', data: null };
+      }
+      
+      // Sign up with Supabase
+      const { data: authData, error: authError } = await supabaseClient.auth.signUp({
+        email,
+        password,
+      });
+      
+      if (authError) {
+        return { error: authError, data: null };
+      }
+      
+      if (!authData.user) {
+        return { error: 'No user returned from signUp', data: null };
+      }
+      
+      // Create the profile
+      const { error: profileError } = await supabaseClient
+        .from('profiles')
+        .upsert({
+          id: authData.user.id,
           username,
-        }),
-      })
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+        
+      if (profileError) {
+        return { error: profileError, data: null };
+      }
       
-      const data = await handleApiResponse(response)
+      setUser(authData.user as User);
+      setSession(authData.session);
+      setIsProfileComplete(true);
       
-      // Store tokens
-      localStorage.setItem('access_token', data.tokens.access_token)
-      localStorage.setItem('refresh_token', data.tokens.refresh_token)
+      router.push('/dashboard/dashboard');
+      return { error: null, data: authData };
       
-      setUser(data.user)
-      setSession({
-        access_token: data.tokens.access_token,
-        refresh_token: data.tokens.refresh_token,
-      } as Session)
-      setIsProfileComplete(true)
-      
-      router.push('/dashboard/dashboard')
-      return { error: null, data }
     } catch (error) {
       console.error('Exception in signUp:', error)
       return { error: error instanceof Error ? error.message : 'An error occurred during signup', data: null }
@@ -204,8 +273,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       if (DEBUG_AUTH) console.log('Signing in user:', email)
       
-      // Use Supabase's built-in signIn instead of custom API
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      if (!supabaseClient) {
+        return { error: 'Supabase client not initialized', data: null };
+      }
+      
+      // Use Supabase's built-in signIn
+      const { data: authData, error: authError } = await supabaseClient.auth.signInWithPassword({
         email,
         password,
       })
@@ -220,25 +293,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: new Error('No session returned from signIn'), data: null }
       }
       
-      // Set the session in Supabase client
-      await supabase.auth.setSession({
-        access_token: authData.session.access_token,
-        refresh_token: authData.session.refresh_token,
-      })
-      
-      setUser(authData.user)
+      setUser(authData.user as User)
       setSession(authData.session)
       
-      // Store minimal auth state in localStorage
-      localStorage.setItem('authState', JSON.stringify({
-        isAuthenticated: true,
-        userId: authData.user.id,
-        hasSupabaseAuth: true,
-        lastUpdated: new Date().toISOString()
-      }))
-      
       // Check if profile is complete
-      const { data: profile } = await supabase
+      const { data: profile } = await supabaseClient
         .from('profiles')
         .select('username')
         .eq('id', authData.user.id)
@@ -268,6 +327,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       if (DEBUG_AUTH) console.log('Signing out user')
       
+      if (supabaseClient) {
+        await supabaseClient.auth.signOut();
+      }
+      
       // Clear all auth state
       localStorage.removeItem('access_token')
       localStorage.removeItem('refresh_token')
@@ -287,21 +350,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Function to update user profile with better error handling
   const updateProfile = async (profileData: any) => {
     try {
-      const accessToken = localStorage.getItem('access_token')
-      if (!accessToken) {
-        return { error: 'No user logged in', data: null }
+      if (!user) {
+        return { error: 'No user logged in', data: null };
       }
-
-      const response = await fetch('/api/auth/me', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify(profileData),
-      })
-
-      const data = await handleApiResponse(response)
+      
+      if (!supabaseClient) {
+        return { error: 'Supabase client not initialized', data: null };
+      }
+      
+      // Update profile using Supabase
+      const { data, error } = await supabaseClient
+        .from('profiles')
+        .upsert({
+          id: user.id,
+          ...profileData,
+          updated_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+        
+      if (error) {
+        return { error, data: null };
+      }
 
       // Update the profile completion status
       if (data?.username) {
