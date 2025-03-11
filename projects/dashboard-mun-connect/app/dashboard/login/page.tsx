@@ -94,55 +94,73 @@ function LoginForm() {
 
   // Check localStorage for existing auth state
   useEffect(() => {
-    if (!user && !isLoading) {
-      const storedAuthState = localStorage.getItem('authState')
-      if (storedAuthState) {
-        try {
-          const authState = JSON.parse(storedAuthState)
-          const lastUpdated = new Date(authState.lastUpdated)
-          const now = new Date()
-          const hoursSinceUpdate = (now.getTime() - lastUpdated.getTime()) / (1000 * 60 * 60)
-          
-          // If auth state is less than 24 hours old, try to restore the session
-          if (hoursSinceUpdate < 24 && authState.isAuthenticated) {
-            if (DEBUG_AUTH) {
-              console.log('Login Form - Found recent auth state:')
-              console.log('- User ID:', authState.userId)
-              console.log('- Last updated:', lastUpdated.toLocaleString())
-              console.log('- Hours since update:', hoursSinceUpdate)
-            }
+    if (!user && !isLoading && typeof window !== 'undefined') {
+      try {
+        const storedAuthState = localStorage.getItem('authState')
+        if (storedAuthState) {
+          try {
+            const authState = JSON.parse(storedAuthState)
+            const lastUpdated = new Date(authState.lastUpdated)
+            const now = new Date()
+            const hoursSinceUpdate = (now.getTime() - lastUpdated.getTime()) / (1000 * 60 * 60)
             
-            // Try to get an active session
-            supabase.auth.getSession().then(({ data, error }) => {
-              if (!error && data.session) {
-                if (DEBUG_AUTH) console.log("Session restored successfully")
-                
-                // Set session explicitly
-                supabase.auth.setSession({
-                  access_token: data.session.access_token,
-                  refresh_token: data.session.refresh_token,
-                }).then(() => {
-                  // Use window.location for full page reload
-                  window.location.href = redirectPath
-                })
-              } else {
-                if (DEBUG_AUTH) {
-                  console.log("Could not restore session:")
-                  console.log('- Error:', error)
-                  console.log('- Session:', data?.session ? 'exists' : 'none')
-                }
-                localStorage.removeItem('authState')
+            // If auth state is less than 24 hours old, try to restore the session
+            if (hoursSinceUpdate < 24 && authState.isAuthenticated) {
+              if (DEBUG_AUTH) {
+                console.log('Login Form - Found recent auth state:')
+                console.log('- User ID:', authState.userId)
+                console.log('- Last updated:', lastUpdated.toLocaleString())
+                console.log('- Hours since update:', hoursSinceUpdate)
               }
-            })
-          } else {
-            // Auth state is too old
-            if (DEBUG_AUTH) console.log('Auth state too old, removing')
-            localStorage.removeItem('authState')
+              
+              // Try to get an active session
+              if (supabase) {
+                supabase.auth.getSession().then(({ data, error }) => {
+                  if (!error && data.session) {
+                    if (DEBUG_AUTH) console.log("Session restored successfully")
+                    
+                    // Set session explicitly
+                    supabase.auth.setSession({
+                      access_token: data.session.access_token,
+                      refresh_token: data.session.refresh_token,
+                    }).then(() => {
+                      // Use window.location for full page reload
+                      window.location.href = redirectPath
+                    })
+                  } else {
+                    if (DEBUG_AUTH) {
+                      console.log("Could not restore session:")
+                      console.log('- Error:', error)
+                      console.log('- Session:', data?.session ? 'exists' : 'none')
+                    }
+                    try {
+                      localStorage.removeItem('authState')
+                    } catch (error) {
+                      console.error('Error removing authState from localStorage:', error);
+                    }
+                  }
+                })
+              }
+            } else {
+              // Auth state is too old
+              if (DEBUG_AUTH) console.log('Auth state too old, removing')
+              try {
+                localStorage.removeItem('authState')
+              } catch (error) {
+                console.error('Error removing old authState from localStorage:', error);
+              }
+            }
+          } catch (e) {
+            console.error("Error parsing auth state:", e)
+            try {
+              localStorage.removeItem('authState')
+            } catch (error) {
+              console.error('Error removing invalid authState from localStorage:', error);
+            }
           }
-        } catch (e) {
-          console.error("Error parsing auth state:", e)
-          localStorage.removeItem('authState')
         }
+      } catch (error) {
+        console.error('Error accessing localStorage:', error);
       }
     }
   }, [isLoading, user, redirectPath])
@@ -233,14 +251,18 @@ function LoginForm() {
         })
         
         // Store auth state in localStorage as backup
-        localStorage.setItem('authState', JSON.stringify({
-          isAuthenticated: true,
-          userId: data.session.user.id,
-          hasSupabaseAuth: true,
-          lastUpdated: new Date().toISOString(),
-          currentUrl: window.location.href,
-          userAgent: navigator.userAgent
-        }))
+        try {
+          localStorage.setItem('authState', JSON.stringify({
+            isAuthenticated: true,
+            userId: data.session.user.id,
+            hasSupabaseAuth: true,
+            lastUpdated: new Date().toISOString(),
+            currentUrl: window.location.href,
+            userAgent: navigator.userAgent
+          }))
+        } catch (error) {
+          console.error('Error storing auth state in localStorage:', error);
+        }
         
         // Force reload the page to ensure session is picked up
         window.location.href = redirectPath

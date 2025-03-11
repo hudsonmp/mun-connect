@@ -25,12 +25,16 @@ const debugAuthState = () => {
   
   // Check localStorage
   console.log('%cLocal Storage:', 'font-weight: bold;');
-  const localStorageItems = {
-    'authState': localStorage.getItem('authState'),
-    'access_token': localStorage.getItem('access_token'),
-    'refresh_token': localStorage.getItem('refresh_token'),
-  };
-  console.table(localStorageItems);
+  try {
+    const localStorageItems = {
+      'authState': localStorage.getItem('authState'),
+      'access_token': localStorage.getItem('access_token'),
+      'refresh_token': localStorage.getItem('refresh_token'),
+    };
+    console.table(localStorageItems);
+  } catch (error) {
+    console.error('Error accessing localStorage:', error);
+  }
   
   console.groupEnd();
 };
@@ -99,7 +103,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       if (DEBUG_AUTH) console.log('Refreshing session...')
       
-      const refreshToken = localStorage.getItem('refresh_token')
+      let refreshToken;
+      try {
+        refreshToken = localStorage.getItem('refresh_token');
+      } catch (error) {
+        console.error('Error accessing refresh token from localStorage:', error);
+        refreshToken = null;
+      }
+      
       if (!refreshToken) {
         setSession(null)
         setUser(null)
@@ -119,7 +130,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       
       const data = await handleApiResponse(response)
-      localStorage.setItem('access_token', data.access_token)
+      try {
+        localStorage.setItem('access_token', data.access_token)
+      } catch (error) {
+        console.error('Error storing access token in localStorage:', error);
+      }
       
       // Get user data with new token
       const userResponse = await fetch('/api/auth/me', {
@@ -138,8 +153,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       console.error('Error in refreshSession:', error)
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('refresh_token')
+      try {
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('refresh_token')
+      } catch (storageError) {
+        console.error('Error clearing tokens from localStorage:', storageError);
+      }
       setSession(null)
       setUser(null)
       
@@ -332,8 +351,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       
       // Clear all auth state
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('refresh_token')
+      try {
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('refresh_token')
+      } catch (error) {
+        console.error('Error clearing tokens from localStorage:', error);
+      }
       setSession(null)
       setUser(null)
       setIsProfileComplete(false)

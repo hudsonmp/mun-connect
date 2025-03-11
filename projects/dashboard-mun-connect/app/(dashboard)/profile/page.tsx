@@ -309,6 +309,8 @@ export default function ProfilePage() {
 
   // Add a function to store profile data in localStorage as a fallback
   const saveProfileToLocalStorage = (profileData: any) => {
+    if (typeof window === 'undefined') return false;
+    
     try {
       localStorage.setItem('profile_data', JSON.stringify(profileData));
       return true;
@@ -316,10 +318,12 @@ export default function ProfilePage() {
       console.error('Error saving to localStorage:', error);
       return false;
     }
-  };
-
+  }
+  
   // Add a function to load profile data from localStorage
   const loadProfileFromLocalStorage = () => {
+    if (typeof window === 'undefined') return null;
+    
     try {
       const data = localStorage.getItem('profile_data');
       return data ? JSON.parse(data) : null;
@@ -327,7 +331,7 @@ export default function ProfilePage() {
       console.error('Error loading from localStorage:', error);
       return null;
     }
-  };
+  }
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!user) {

@@ -154,7 +154,7 @@ export const getSupabase = () => {
           persistSession: true,
           detectSessionInUrl: true,
           storageKey: 'supabase.auth.token',
-          storage: window.localStorage
+          storage: typeof window !== 'undefined' ? window.localStorage : undefined
         },
         global: {
           fetch: customFetch
@@ -179,9 +179,15 @@ if (typeof window !== 'undefined') {
       if (DEBUG_AUTH) console.log('Initializing Supabase client and session')
       
       // First check if we have a stored auth state that claims we're authenticated
-      const storedAuthState = localStorage.getItem('authState');
+      let storedAuthState = null;
       let localAuthClaim = false;
       let localUserId = null;
+      
+      try {
+        storedAuthState = localStorage.getItem('authState');
+      } catch (error) {
+        console.error('Error accessing localStorage:', error);
+      }
       
       if (storedAuthState) {
         try {
@@ -204,12 +210,21 @@ if (typeof window !== 'undefined') {
               userAgent: navigator.userAgent,
               hasSupabaseAuth: false // Will update this later if we find a session
             };
-            localStorage.setItem('authState', JSON.stringify(updatedAuthState));
+            
+            try {
+              localStorage.setItem('authState', JSON.stringify(updatedAuthState));
+            } catch (error) {
+              console.error('Error updating authState in localStorage:', error);
+            }
           }
         } catch (e) {
           console.error('Error parsing auth state:', e);
           // Clear corrupted auth state
-          localStorage.removeItem('authState');
+          try {
+            localStorage.removeItem('authState');
+          } catch (error) {
+            console.error('Error removing authState from localStorage:', error);
+          }
         }
       }
       
@@ -232,12 +247,16 @@ if (typeof window !== 'undefined') {
             if (refreshResult.data?.session) {
               if (DEBUG_AUTH) console.log('Successfully refreshed session from local auth claim');
               // Update auth state to indicate we have a Supabase session
-              const currentAuthState = JSON.parse(localStorage.getItem('authState') || '{}');
-              localStorage.setItem('authState', JSON.stringify({
-                ...currentAuthState,
-                hasSupabaseAuth: true,
-                lastUpdated: new Date().toISOString()
-              }));
+              try {
+                const currentAuthState = JSON.parse(localStorage.getItem('authState') || '{}');
+                localStorage.setItem('authState', JSON.stringify({
+                  ...currentAuthState,
+                  hasSupabaseAuth: true,
+                  lastUpdated: new Date().toISOString()
+                }));
+              } catch (error) {
+                console.error('Error updating auth state after session refresh:', error);
+              }
             }
           } catch (refreshError) {
             console.error('Failed to refresh session:', refreshError);
@@ -266,14 +285,18 @@ if (typeof window !== 'undefined') {
           if (DEBUG_AUTH) console.log('Session explicitly set')
           
           // Ensure localStorage is synced with this valid session
-          localStorage.setItem('authState', JSON.stringify({
-            isAuthenticated: true,
-            userId: data.session.user.id,
-            hasSupabaseAuth: true,
-            lastUpdated: new Date().toISOString(),
-            currentUrl: window.location.href,
-            userAgent: navigator.userAgent
-          }))
+          try {
+            localStorage.setItem('authState', JSON.stringify({
+              isAuthenticated: true,
+              userId: data.session.user.id,
+              hasSupabaseAuth: true,
+              lastUpdated: new Date().toISOString(),
+              currentUrl: window.location.href,
+              userAgent: navigator.userAgent
+            }));
+          } catch (error) {
+            console.error('Error syncing auth state to localStorage:', error);
+          }
         } catch (err) {
           console.error('Error setting session:', err)
         }
@@ -290,21 +313,29 @@ if (typeof window !== 'undefined') {
               if (DEBUG_AUTH) console.log('Successfully refreshed session in final attempt');
               
               // Update auth state to indicate we have a Supabase session
-              localStorage.setItem('authState', JSON.stringify({
-                isAuthenticated: true,
-                userId: refreshResult.data.session.user.id,
-                hasSupabaseAuth: true,
-                lastUpdated: new Date().toISOString(),
-                currentUrl: window.location.href,
-                userAgent: navigator.userAgent
-              }));
+              try {
+                localStorage.setItem('authState', JSON.stringify({
+                  isAuthenticated: true,
+                  userId: refreshResult.data.session.user.id,
+                  hasSupabaseAuth: true,
+                  lastUpdated: new Date().toISOString(),
+                  currentUrl: window.location.href,
+                  userAgent: navigator.userAgent
+                }));
+              } catch (error) {
+                console.error('Error updating auth state after final refresh:', error);
+              }
               
               return;
             } else {
               // If refresh failed, clear the auth state
               if (DEBUG_AUTH) console.log('Failed to refresh session in final attempt, clearing local storage');
-              localStorage.removeItem('authState');
-              localStorage.removeItem('supabase-auth');
+              try {
+                localStorage.removeItem('authState');
+                localStorage.removeItem('supabase-auth');
+              } catch (error) {
+                console.error('Error clearing auth state after failed refresh:', error);
+              }
               
               // Force reload to ensure clean state
               if (!window.location.pathname.includes('/login')) {
@@ -314,8 +345,12 @@ if (typeof window !== 'undefined') {
             }
           } catch (refreshError) {
             console.error('Failed in final refresh attempt:', refreshError);
-            localStorage.removeItem('authState');
-            localStorage.removeItem('supabase-auth');
+            try {
+              localStorage.removeItem('authState');
+              localStorage.removeItem('supabase-auth');
+            } catch (error) {
+              console.error('Error clearing auth state after refresh error:', error);
+            }
           }
         }
       }
@@ -328,9 +363,13 @@ if (typeof window !== 'undefined') {
   initializeSession()
   
   // Store the redirect URL for reference in other components
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem('supabaseRedirectUrl', redirectUrl)
-    if (DEBUG_AUTH) console.log('Redirect URL stored:', redirectUrl)
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('supabaseRedirectUrl', redirectUrl)
+      if (DEBUG_AUTH) console.log('Redirect URL stored:', redirectUrl)
+    }
+  } catch (error) {
+    console.error('Error storing redirect URL:', error);
   }
   
   // Listen for auth state changes
@@ -343,19 +382,27 @@ if (typeof window !== 'undefined') {
         
         // Update backup auth state
         if (session) {
-          localStorage.setItem('authState', JSON.stringify({
-            isAuthenticated: true,
-            userId: session.user.id,
-            hasSupabaseAuth: true,
-            lastUpdated: new Date().toISOString(),
-            currentUrl: window.location.href,
-            userAgent: navigator.userAgent
-          }))
+          try {
+            localStorage.setItem('authState', JSON.stringify({
+              isAuthenticated: true,
+              userId: session.user.id,
+              hasSupabaseAuth: true,
+              lastUpdated: new Date().toISOString(),
+              currentUrl: window.location.href,
+              userAgent: navigator.userAgent
+            }));
+          } catch (error) {
+            console.error('Error updating auth state on sign in:', error);
+          }
         }
       } else if (event === 'SIGNED_OUT') {
         if (DEBUG_AUTH) console.log('User signed out')
-        localStorage.removeItem('authState')
-        localStorage.removeItem('supabase-auth')
+        try {
+          localStorage.removeItem('authState');
+          localStorage.removeItem('supabase-auth');
+        } catch (error) {
+          console.error('Error clearing auth state on sign out:', error);
+        }
       }
     })
   
@@ -371,34 +418,42 @@ if (typeof window !== 'undefined') {
   
     // Add a recovery mechanism for stuck auth initialization
     setTimeout(() => {
-      const authStateRaw = localStorage.getItem('authState');
-      if (authStateRaw) {
-        try {
-          const authState = JSON.parse(authStateRaw);
-          if (authState.isAuthenticated && !authState.hasSupabaseAuth) {
-            if (DEBUG_AUTH) console.log('Detected stuck auth initialization after timeout');
-            // Try to refresh the session
-            supabase.auth.refreshSession().then(({ data, error }) => {
-              if (error) {
-                if (DEBUG_AUTH) console.log('Failed to refresh session after timeout:', error);
-                if (!window.location.pathname.includes('/login')) {
-                  window.location.href = '/dashboard/login';
+      try {
+        const authStateRaw = localStorage.getItem('authState');
+        if (authStateRaw) {
+          try {
+            const authState = JSON.parse(authStateRaw);
+            if (authState.isAuthenticated && !authState.hasSupabaseAuth) {
+              if (DEBUG_AUTH) console.log('Detected stuck auth initialization after timeout');
+              // Try to refresh the session
+              supabase.auth.refreshSession().then(({ data, error }) => {
+                if (error) {
+                  if (DEBUG_AUTH) console.log('Failed to refresh session after timeout:', error);
+                  if (!window.location.pathname.includes('/login')) {
+                    window.location.href = '/dashboard/login';
+                  }
+                } else if (data.session) {
+                  if (DEBUG_AUTH) console.log('Successfully refreshed session after timeout');
+                  try {
+                    localStorage.setItem('authState', JSON.stringify({
+                      ...authState,
+                      hasSupabaseAuth: true,
+                      lastUpdated: new Date().toISOString()
+                    }));
+                  } catch (error) {
+                    console.error('Error updating auth state after timeout refresh:', error);
+                  }
+                  // Reload the page to ensure all components reflect the correct auth state
+                  window.location.reload();
                 }
-              } else if (data.session) {
-                if (DEBUG_AUTH) console.log('Successfully refreshed session after timeout');
-                localStorage.setItem('authState', JSON.stringify({
-                  ...authState,
-                  hasSupabaseAuth: true,
-                  lastUpdated: new Date().toISOString()
-                }));
-                // Reload the page to ensure all components reflect the correct auth state
-                window.location.reload();
-              }
-            });
+              });
+            }
+          } catch (e) {
+            console.error('Error parsing auth state during recovery:', e);
           }
-        } catch (e) {
-          console.error('Error parsing auth state during recovery:', e);
         }
+      } catch (error) {
+        console.error('Error accessing localStorage during recovery:', error);
       }
     }, 5000); // Check after 5 seconds
   }
