@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
       try {
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
-          .select('id')
+          .select('id, username')
           .eq('id', data.session.user.id)
           .single()
           
@@ -112,6 +112,27 @@ export async function GET(request: NextRequest) {
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
             })
+            
+          // Redirect to profile setup if profile was just created
+          const finalRedirectPath = '/profile-setup'
+          const setupUrl = new URL(BASE_PATH + finalRedirectPath, requestUrl.origin)
+          
+          if (DEBUG_AUTH) console.log('Redirecting new user to profile setup:', setupUrl.toString())
+          
+          const response = NextResponse.redirect(setupUrl)
+          response.headers.set('Cache-Control', 'no-store, max-age=0')
+          return response
+        }
+        
+        // If profile exists but no username, redirect to profile setup
+        if (!profileData.username) {
+          const setupUrl = new URL(BASE_PATH + '/profile-setup', requestUrl.origin)
+          
+          if (DEBUG_AUTH) console.log('Redirecting to profile setup (no username):', setupUrl.toString())
+          
+          const response = NextResponse.redirect(setupUrl)
+          response.headers.set('Cache-Control', 'no-store, max-age=0')
+          return response
         }
       } catch (e) {
         console.error('Error checking/creating profile:', e)
@@ -121,17 +142,18 @@ export async function GET(request: NextRequest) {
     // Set a cookie to indicate successful auth - make sure to redirect to normalized path
     const finalRedirectPath = normalizedNext === '/' ? BASE_PATH : `${BASE_PATH}${normalizedNext}`
     const dashboardUrl = new URL(finalRedirectPath, requestUrl.origin)
+    
+    // Add a debug parameter to help track where the user came from
+    dashboardUrl.searchParams.set('auth_source', 'callback')
+    
+    if (DEBUG_AUTH) console.log('Redirecting to:', dashboardUrl.toString())
+    
     const response = NextResponse.redirect(dashboardUrl)
     
     // Set cache headers to prevent caching
     response.headers.set('Cache-Control', 'no-store, max-age=0')
     response.headers.set('Pragma', 'no-cache')
     response.headers.set('Expires', '0')
-    
-    // Add a debug parameter to help track where the user came from
-    dashboardUrl.searchParams.set('auth_source', 'callback')
-    
-    if (DEBUG_AUTH) console.log('Redirecting to:', dashboardUrl.toString())
     
     return response
   } catch (error) {

@@ -42,11 +42,17 @@ function LoginForm() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [loginAttempts, setLoginAttempts] = useState(0)
   const [authErrorState, setAuthErrorState] = useState<string | null>(null)
+  const [retryCount, setRetryCount] = useState(0)
 
   // If already authenticated, redirect to the specified path
   useEffect(() => {
     if (!isLoading && user) {
-      if (DEBUG_AUTH) console.log("User authenticated, redirecting to:", redirectPath)
+      if (DEBUG_AUTH) {
+        console.log('Login Form - User authenticated:')
+        console.log('- User ID:', user.id)
+        console.log('- Email:', user.email)
+        console.log('- Redirect path:', redirectPath)
+      }
       
       // Use window.location for a full page reload to ensure session is picked up
       window.location.href = redirectPath
@@ -91,7 +97,12 @@ function LoginForm() {
           
           // If auth state is less than 24 hours old, try to restore the session
           if (hoursSinceUpdate < 24 && authState.isAuthenticated) {
-            if (DEBUG_AUTH) console.log("Found recent auth state, attempting to restore session")
+            if (DEBUG_AUTH) {
+              console.log('Login Form - Found recent auth state:')
+              console.log('- User ID:', authState.userId)
+              console.log('- Last updated:', lastUpdated.toLocaleString())
+              console.log('- Hours since update:', hoursSinceUpdate)
+            }
             
             // Try to get an active session
             supabase.auth.getSession().then(({ data, error }) => {
@@ -107,12 +118,17 @@ function LoginForm() {
                   window.location.href = redirectPath
                 })
               } else {
-                if (DEBUG_AUTH) console.log("Could not restore session:", error)
+                if (DEBUG_AUTH) {
+                  console.log("Could not restore session:")
+                  console.log('- Error:', error)
+                  console.log('- Session:', data?.session ? 'exists' : 'none')
+                }
                 localStorage.removeItem('authState')
               }
             })
           } else {
             // Auth state is too old
+            if (DEBUG_AUTH) console.log('Auth state too old, removing')
             localStorage.removeItem('authState')
           }
         } catch (e) {
@@ -136,12 +152,34 @@ function LoginForm() {
     setLoginAttempts(prev => prev + 1)
     setAuthErrorState(null)
     
+    const retryLogin = async () => {
+      setRetryCount(prev => prev + 1)
+      try {
+        const { error, data } = await signIn(values.email, values.password)
+        if (!error && data?.session) {
+          // Handle successful retry
+          window.location.href = redirectPath
+        }
+      } catch (e) {
+        console.error('Error in retry attempt:', e)
+      }
+    }
+    
     try {
-      if (DEBUG_AUTH) console.log("Attempting to sign in user:", values.email)
+      if (DEBUG_AUTH) {
+        console.log('Login Form - Attempting sign in:')
+        console.log('- Email:', values.email)
+        console.log('- Attempt:', loginAttempts + 1)
+      }
+      
       const { error, data } = await signIn(values.email, values.password)
       
       if (error) {
-        if (DEBUG_AUTH) console.error("Sign in error:", error)
+        if (DEBUG_AUTH) {
+          console.error('Login Form - Sign in error:')
+          console.error('- Message:', error.message)
+          console.error('- Code:', error.code)
+        }
         
         const errorMessage = error.message || "Please check your credentials and try again."
         setAuthErrorState(errorMessage)
@@ -164,16 +202,37 @@ function LoginForm() {
           })
         }
         
+        // If we get a network error, retry up to 3 times
+        if (error.message.toLowerCase().includes('network') && retryCount < 3) {
+          const delay = Math.pow(2, retryCount) * 1000
+          setTimeout(retryLogin, delay)
+        }
+        
         return
       }
       
       if (data?.session) {
-        if (DEBUG_AUTH) console.log("Login successful, redirecting to:", redirectPath)
+        if (DEBUG_AUTH) {
+          console.log('Login Form - Login successful:')
+          console.log('- User ID:', data.session.user.id)
+          console.log('- Email:', data.session.user.email)
+          console.log('- Redirect path:', redirectPath)
+        }
         
         toast({
           title: "Login successful",
           description: "Welcome back to MUN Connect!",
         })
+        
+        // Store auth state in localStorage as backup
+        localStorage.setItem('authState', JSON.stringify({
+          isAuthenticated: true,
+          userId: data.session.user.id,
+          hasSupabaseAuth: true,
+          lastUpdated: new Date().toISOString(),
+          currentUrl: window.location.href,
+          userAgent: navigator.userAgent
+        }))
         
         // Force reload the page to ensure session is picked up
         window.location.href = redirectPath
@@ -250,6 +309,7 @@ function LoginForm() {
                 </FormItem>
               )}
             />
+
             <FormField
               control={form.control}
               name="password"
@@ -268,9 +328,19 @@ function LoginForm() {
                 </FormItem>
               )}
             />
-            <Button 
-              type="submit" 
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+
+            <div className="flex items-center justify-between">
+              <Link
+                href="/dashboard/forgot-password"
+                className="text-sm font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
+              >
+                Forgot your password?
+              </Link>
+            </div>
+
+            <Button
+              type="submit"
+              className="w-full"
               disabled={isSubmitting}
             >
               {isSubmitting ? (
@@ -282,37 +352,20 @@ function LoginForm() {
                 "Sign in"
               )}
             </Button>
-            
-            <div className="flex items-center justify-between text-sm">
-              <Link 
-                href="/dashboard/forgot-password" 
-                className="text-blue-600 hover:underline dark:text-blue-400"
-              >
-                Forgot password?
-              </Link>
-              
-              <button 
-                type="button"
-                onClick={() => window.location.href = redirectPath + '?_auth_bypass=true'}
-                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 text-xs"
-              >
-                Bypass Auth (Debug)
-              </button>
+
+            <div className="text-center">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Don't have an account?{" "}
+                <Link
+                  href="/dashboard/register"
+                  className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
+                >
+                  Sign up
+                </Link>
+              </p>
             </div>
           </form>
         </Form>
-
-        <div className="mt-6 text-center text-sm">
-          <p className="text-gray-600 dark:text-gray-400">
-            Don&apos;t have an account?{" "}
-            <Link 
-              href="/dashboard/register" 
-              className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
-            >
-              Register
-            </Link>
-          </p>
-        </div>
       </div>
     </div>
   )
@@ -321,10 +374,12 @@ function LoginForm() {
 // Loading fallback
 function LoginLoading() {
   return (
-    <div className="flex min-h-[calc(100vh-64px)] flex-col items-center justify-center bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 p-4">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950">
       <div className="flex flex-col items-center">
         <Loader2 className="h-12 w-12 animate-spin text-blue-600 mb-4" />
-        <p className="text-blue-600 font-medium">Loading...</p>
+        <p className="text-blue-600 font-medium">
+          Loading MUN Connect...
+        </p>
       </div>
     </div>
   )

@@ -10,7 +10,7 @@ const DEBUG_AUTH = true
 // Get environment variables
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-const redirectUrl = process.env.NEXT_PUBLIC_REDIRECT_URL || 'https://mun-connect-dashboard.vercel.app/auth/callback'
+const redirectUrl = process.env.NEXT_PUBLIC_REDIRECT_URL || '/dashboard/auth/callback'
 
 // Validate environment variables
 if (!supabaseUrl || !supabaseAnonKey) {
@@ -105,6 +105,7 @@ const authConfig = {
     detectSessionInUrl: true,
     storage: typeof window !== 'undefined' ? window.localStorage : undefined,
     storageKey: 'supabase-auth',
+    redirectTo: typeof window !== 'undefined' ? `${window.location.origin}${redirectUrl}` : undefined
   },
   global: {
     fetch: customFetch
