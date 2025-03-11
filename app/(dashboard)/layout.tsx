@@ -2,10 +2,10 @@
 
 import React from "react"
 import { usePathname } from "next/navigation"
-import { DashboardSidebar } from "../../components/dashboard/dashboard-sidebar"
-import { DashboardHeader } from "../../components/dashboard/dashboard-header"
-import { ProtectedRoute } from "../../components/auth/protected-route"
-import { Toaster } from "../../components/ui/toaster"
+import { DashboardSidebar } from "../../../components/dashboard/dashboard-sidebar"
+import { DashboardHeader } from "../../../components/dashboard/dashboard-header"
+import { ProtectedRoute } from "../../../components/auth/protected-route"
+import { Toaster } from "../../../components/ui/toaster"
 
 export default function DashboardLayout({
   children,
@@ -15,7 +15,7 @@ export default function DashboardLayout({
   const pathname = usePathname()
   
   // Don't apply protection to login and register pages
-  const isAuthRoute = pathname === '/login' || pathname === '/register'
+  const isAuthRoute = pathname === '/dashboard/login' || pathname === '/dashboard/register'
   
   return (
     <>
