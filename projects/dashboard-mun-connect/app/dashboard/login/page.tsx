@@ -25,6 +25,25 @@ import { DashboardHeader } from "../../../components/dashboard/dashboard-header"
 // Debug flag
 const DEBUG_AUTH = true
 
+// Base path from next.config
+const BASE_PATH = '/dashboard'
+
+// Helper for creating proper redirect paths
+const getProperRedirectPath = (path: string) => {
+  // Handle default case
+  if (!path || path === '/') {
+    return BASE_PATH;
+  }
+  
+  // If path already includes base path, don't duplicate it
+  if (path.startsWith(BASE_PATH)) {
+    return path;
+  }
+  
+  // Otherwise, prepend the base path
+  return `${BASE_PATH}${path.startsWith('/') ? path : '/' + path}`;
+};
+
 const formSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address" }),
   password: z.string().min(6, { message: "Password must be at least 6 characters" }),
@@ -35,7 +54,8 @@ function LoginForm() {
   const { signIn, user, isLoading } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const redirectPath = searchParams.get('redirect') || '/dashboard'
+  const redirectPathParam = searchParams.get('redirect') || '/'
+  const redirectPath = getProperRedirectPath(redirectPathParam)
   const authError = searchParams.get('error')
   const errorDescription = searchParams.get('error_description')
   const { toast } = useToast()
@@ -54,16 +74,8 @@ function LoginForm() {
         console.log('- Redirect path:', redirectPath)
       }
       
-      // Handle the redirect path properly with basePath
-      let finalRedirectPath = redirectPath;
-      
-      // If redirect doesn't start with /dashboard, add it
-      if (!finalRedirectPath.startsWith('/dashboard')) {
-        finalRedirectPath = `/dashboard${finalRedirectPath === '/' ? '' : finalRedirectPath}`;
-      }
-      
       // Use window.location for a full page reload to ensure session is picked up
-      window.location.href = finalRedirectPath;
+      window.location.href = redirectPath;
     }
   }, [user, isLoading, redirectPath])
 
@@ -196,6 +208,7 @@ function LoginForm() {
         console.log('Login Form - Attempting sign in:')
         console.log('- Email:', values.email)
         console.log('- Attempt:', loginAttempts + 1)
+        console.log('- Redirect path:', redirectPath)
       }
       
       const { error, data } = await signIn(values.email, values.password)

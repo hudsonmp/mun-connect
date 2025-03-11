@@ -9,6 +9,17 @@ import { User } from './types'
 // Debug flag to help debug auth issues
 const DEBUG_AUTH = true
 
+// Base path from next.config
+const BASE_PATH = '/dashboard'
+
+// Helper to ensure paths include the base path
+const getFullPath = (path: string) => {
+  if (path.startsWith(BASE_PATH)) {
+    return path
+  }
+  return `${BASE_PATH}${path.startsWith('/') ? path : '/' + path}`
+}
+
 // Add a browser console debugger function
 const debugAuthState = () => {
   if (typeof window === 'undefined' || !DEBUG_AUTH) return;
@@ -90,12 +101,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Helper function to check if a path is an auth path
   const isAuthPath = useCallback((path: string) => {
-    const authPaths = ['/login', '/register', '/profile-setup']
-    return authPaths.some(authPath => 
-      path === authPath || 
-      path === `/dashboard${authPath}` || 
-      path === `/dashboard/dashboard${authPath}`
-    )
+    const authPaths = ['/login', '/register', '/profile-setup', '/forgot-password', '/reset-password']
+    // Normalize path to handle base path variations
+    const normalizedPath = path.replace(BASE_PATH, '')
+    return authPaths.some(authPath => normalizedPath === authPath)
   }, [])
 
   // Enhanced session refresh with better error handling
@@ -117,7 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsLoading(false)
         
         if (!isAuthPath(pathname || '')) {
-          router.push('/dashboard/login')
+          router.push(getFullPath('/login'))
         }
         return
       }
@@ -149,7 +158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsProfileComplete(!!userData.username)
       
       if (isAuthPath(pathname || '')) {
-        router.push('/dashboard/dashboard')
+        router.push(getFullPath('/'))
       }
     } catch (error) {
       console.error('Error in refreshSession:', error)
@@ -163,7 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null)
       
       if (!isAuthPath(pathname || '')) {
-        router.push('/dashboard/login')
+        router.push(getFullPath('/login'))
       }
     } finally {
       setIsLoading(false)
@@ -278,7 +287,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(authData.session);
       setIsProfileComplete(true);
       
-      router.push('/dashboard/dashboard');
+      router.push(getFullPath('/'));
       return { error: null, data: authData };
       
     } catch (error) {
@@ -326,12 +335,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       // Handle redirect
       const params = new URLSearchParams(window.location.search)
-      const redirectPath = params.get('redirect') || '/dashboard'
+      const redirectPath = params.get('redirect') || '/'
       
       if (!profile?.username) {
-        router.push('/dashboard/profile-setup')
+        router.push(getFullPath('/profile-setup'))
       } else {
-        router.push(redirectPath)
+        // Make sure redirect path has the base path when needed
+        router.push(getFullPath(redirectPath))
       }
       
       return { error: null, data: authData }
@@ -362,7 +372,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsProfileComplete(false)
       
       // Navigate to login page
-      router.push('/dashboard/login')
+      router.push(getFullPath('/login'))
       
       if (DEBUG_AUTH) console.log('Sign out complete')
     } catch (error) {

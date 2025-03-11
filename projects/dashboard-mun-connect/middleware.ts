@@ -5,32 +5,32 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 // Base path from next.config
 const BASE_PATH = '/dashboard'
 
-// Define protected route patterns - THESE SHOULD INCLUDE THE BASE PATH
+// Define protected route patterns - THESE SHOULD NOT INCLUDE THE BASE PATH
 const protectedRoutes = [
-  '/dashboard',
-  '/dashboard/write',
-  '/dashboard/research',
-  '/dashboard/prepare',
-  '/dashboard/conference',
-  '/dashboard/network',
-  '/dashboard/profile',
+  '/',
+  '/write',
+  '/research',
+  '/prepare',
+  '/conference',
+  '/network',
+  '/profile',
 ]
 
-// Define authentication exempt routes - THESE SHOULD INCLUDE THE BASE PATH
+// Define authentication exempt routes - THESE SHOULD NOT INCLUDE THE BASE PATH
 const authRoutes = [
-  '/dashboard/login',
-  '/dashboard/register',
-  '/dashboard/profile-setup',
-  '/dashboard/forgot-password',
-  '/dashboard/reset-password',
+  '/login',
+  '/register',
+  '/profile-setup',
+  '/forgot-password',
+  '/reset-password',
 ]
 
 // Paths that should be exempt from redirect loops
 const authCallbackRoutes = [
-  '/dashboard/auth/callback',
-  '/dashboard/api/auth',
-  '/dashboard/api/auth/callback',
-  '/dashboard/api', // Basic API routes
+  '/auth/callback',
+  '/api/auth',
+  '/api/auth/callback',
+  '/api', // Basic API routes
 ]
 
 // Debug flag - enable to log authentication flow details
@@ -41,9 +41,16 @@ export async function middleware(request: NextRequest) {
   const res = NextResponse.next()
   
   try {
+    // Extract path without base path for cleaner comparison
+    const fullPath = request.nextUrl.pathname
+    const path = fullPath.startsWith(BASE_PATH) 
+      ? fullPath.substring(BASE_PATH.length) || '/'
+      : fullPath
+    
     // Log the current path for debugging
     if (DEBUG_AUTH) {
-      console.log(`Middleware running for path: ${request.nextUrl.pathname}`)
+      console.log(`Middleware running for path: ${fullPath}`)
+      console.log(`Normalized path for comparison: ${path}`)
     }
     
     // CIRCUIT BREAKER: Check for backdoor URL parameter to break infinite redirect loops
@@ -61,7 +68,7 @@ export async function middleware(request: NextRequest) {
     
     // PATH TYPE DETECTION: Determine what kind of route we're on
     const isAuthCallbackRoute = authCallbackRoutes.some(route => 
-      request.nextUrl.pathname.includes(route)
+      path.startsWith(route)
     )
     
     // Skip middleware for auth callback routes
@@ -75,7 +82,7 @@ export async function middleware(request: NextRequest) {
     if (redirectCount > 3) {
       // Too many redirects, clear cookies and go to login with error
       if (DEBUG_AUTH) console.log('Too many redirects detected, breaking loop')
-      const response = NextResponse.redirect(new URL('/dashboard/login?error=too_many_redirects', request.url))
+      const response = NextResponse.redirect(new URL(`${BASE_PATH}/login?error=too_many_redirects`, request.url))
       response.cookies.set('redirect_count', '0')
       return response
     }
@@ -105,18 +112,19 @@ export async function middleware(request: NextRequest) {
       }
     )
     
+    // Check if the path is a protected or auth route (without base path)
     const isProtectedRoute = protectedRoutes.some(route => 
-      request.nextUrl.pathname === route || 
-      (route !== '/dashboard' && request.nextUrl.pathname.startsWith(route))
+      path === route || 
+      (route !== '/' && path.startsWith(route))
     )
     
     const isAuthRoute = authRoutes.some(route => 
-      request.nextUrl.pathname === route
+      path === route
     )
     
     // Skip middleware for non-protected and non-auth routes
     if (!isProtectedRoute && !isAuthRoute) {
-      if (DEBUG_AUTH) console.log(`Non-protected, non-auth route: ${request.nextUrl.pathname}, skipping middleware`)
+      if (DEBUG_AUTH) console.log(`Non-protected, non-auth route: ${path}, skipping middleware`)
       return res
     }
     
@@ -125,7 +133,7 @@ export async function middleware(request: NextRequest) {
     const session = data?.session
     
     if (DEBUG_AUTH) {
-      console.log(`Path: ${request.nextUrl.pathname}`)
+      console.log(`Path: ${path}`)
       console.log(`Is authenticated: ${!!session}`)
       if (session) {
         const expiresAt = session.expires_at ? new Date(session.expires_at * 1000) : 'No expiry'
@@ -145,17 +153,13 @@ export async function middleware(request: NextRequest) {
         
         // User is already logged in, redirect to dashboard
         if (DEBUG_AUTH) console.log('User is authenticated, redirecting from auth route to dashboard')
-        const dashboardUrl = new URL('/dashboard', request.url)
+        const dashboardUrl = new URL(`${BASE_PATH}`, request.url)
         
         // Preserve any redirect parameter
         const redirectParam = request.nextUrl.searchParams.get('redirect')
         if (redirectParam) {
-          // Make sure we handle the case where redirect already includes the base path
-          if (redirectParam.startsWith('/dashboard')) {
-            dashboardUrl.pathname = redirectParam
-          } else {
-            dashboardUrl.pathname = `/dashboard${redirectParam}`
-          }
+          // Don't add base path again for redirect parameters
+          dashboardUrl.pathname = `${BASE_PATH}${redirectParam.startsWith('/') ? redirectParam : '/' + redirectParam}`
         }
         
         return NextResponse.redirect(dashboardUrl)
@@ -170,15 +174,12 @@ export async function middleware(request: NextRequest) {
         // Not authenticated, redirect to login
         if (DEBUG_AUTH) console.log('User is not authenticated, redirecting to login')
         
-        // Get the path without the base path for the redirect parameter
-        let redirectPath = request.nextUrl.pathname
-        if (redirectPath.startsWith('/dashboard')) {
-          redirectPath = redirectPath.substring('/dashboard'.length) || '/'
-        }
+        // Get the path for the redirect parameter (WITHOUT base path)
+        const redirectPath = path
         
         // Increment redirect counter to detect loops
         const loginRedirect = NextResponse.redirect(
-          new URL(`/dashboard/login?redirect=${encodeURIComponent(redirectPath)}`, request.url)
+          new URL(`${BASE_PATH}/login?redirect=${encodeURIComponent(redirectPath)}`, request.url)
         )
         loginRedirect.cookies.set('redirect_count', (redirectCount + 1).toString())
         // Ensure cache control headers prevent caching
@@ -187,7 +188,7 @@ export async function middleware(request: NextRequest) {
       }
       
       // User is authenticated, check if profile is complete
-      if (request.nextUrl.pathname !== '/dashboard/profile-setup') {
+      if (path !== '/profile-setup') {
         try {
           const { data: profile, error } = await supabase
             .from('profiles')
@@ -203,7 +204,7 @@ export async function middleware(request: NextRequest) {
           
           if (!profile?.username) {
             if (DEBUG_AUTH) console.log('Profile incomplete, redirecting to profile setup')
-            return NextResponse.redirect(new URL('/dashboard/profile-setup', request.url))
+            return NextResponse.redirect(new URL(`${BASE_PATH}/profile-setup`, request.url))
           }
         } catch (error) {
           console.error('Exception checking profile:', error)
@@ -225,7 +226,7 @@ export async function middleware(request: NextRequest) {
     console.error('Middleware exception:', error)
     
     // Emergency fallback to prevent the site from breaking
-    const response = NextResponse.redirect(new URL('/dashboard/login?error=middleware_error', request.url))
+    const response = NextResponse.redirect(new URL(`${BASE_PATH}/login?error=middleware_error`, request.url))
     response.cookies.set('redirect_count', '0') // Reset redirect count
     return response
   }

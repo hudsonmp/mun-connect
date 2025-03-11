@@ -15,11 +15,14 @@ export const dynamic = 'force-dynamic'
 const getPath = (path: string) => {
   // If the path already starts with the base path, don't duplicate it
   if (path.startsWith(BASE_PATH)) {
-    // Remove the base path prefix
-    return path.substring(BASE_PATH.length) || '/'
+    return path
   }
-  // If it doesn't start with the base path, return as is
-  return path
+  // If it's just a slash, return the base path
+  if (path === '/') {
+    return BASE_PATH
+  }
+  // Otherwise, combine them properly
+  return `${BASE_PATH}${path.startsWith('/') ? path : '/' + path}`
 }
 
 /**
@@ -31,10 +34,10 @@ export async function GET(request: NextRequest) {
   const code = requestUrl.searchParams.get('code')
   const error = requestUrl.searchParams.get('error')
   const errorDescription = requestUrl.searchParams.get('error_description')
-  const next = requestUrl.searchParams.get('next') || '/dashboard'
+  const next = requestUrl.searchParams.get('next') || '/'
   
-  // Normalize the next path
-  const normalizedNext = getPath(next)
+  // Create properly formatted redirect paths
+  const formattedNext = getPath(next)
   
   if (DEBUG_AUTH) {
     console.log('🔐 Auth callback triggered with:')
@@ -42,7 +45,7 @@ export async function GET(request: NextRequest) {
     console.log('- Code exists:', !!code)
     console.log('- Error:', error || 'none')
     console.log('- Original redirect destination:', next)
-    console.log('- Normalized redirect destination:', normalizedNext)
+    console.log('- Formatted redirect destination:', formattedNext)
     console.log('- Headers:', Object.fromEntries([...request.headers.entries()]))
   }
   
@@ -50,14 +53,14 @@ export async function GET(request: NextRequest) {
   if (error) {
     console.error('Auth error in callback:', error, errorDescription)
     return NextResponse.redirect(
-      new URL(`/login?error=${error}&error_description=${encodeURIComponent(errorDescription || '')}`, requestUrl.origin + BASE_PATH)
+      new URL(`${BASE_PATH}/login?error=${error}&error_description=${encodeURIComponent(errorDescription || '')}`, requestUrl.origin)
     )
   }
   
   // If there's no auth code, redirect to login
   if (!code) {
     if (DEBUG_AUTH) console.log('No code parameter found in callback URL')
-    return NextResponse.redirect(new URL('/login', requestUrl.origin + BASE_PATH))
+    return NextResponse.redirect(new URL(`${BASE_PATH}/login`, requestUrl.origin))
   }
   
   try {
@@ -66,7 +69,7 @@ export async function GET(request: NextRequest) {
     // Create a Supabase client with server cookies
     const cookieStore = await cookies()
     
-    // Create the Supabase client - use simple cookie implementation to avoid type errors
+    // Create the Supabase client
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL || '',
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
@@ -99,7 +102,7 @@ export async function GET(request: NextRequest) {
     if (error) {
       console.error('Error exchanging code for session:', error)
       return NextResponse.redirect(
-        new URL(`/login?error=session_error&error_description=${encodeURIComponent(error.message)}`, requestUrl.origin + BASE_PATH)
+        new URL(`${BASE_PATH}/login?error=session_error&error_description=${encodeURIComponent(error.message)}`, requestUrl.origin)
       )
     }
     
@@ -140,8 +143,7 @@ export async function GET(request: NextRequest) {
             })
             
           // Redirect to profile setup if profile was just created
-          const finalRedirectPath = '/profile-setup'
-          const setupUrl = new URL(BASE_PATH + finalRedirectPath, requestUrl.origin)
+          const setupUrl = new URL(`${BASE_PATH}/profile-setup`, requestUrl.origin)
           
           if (DEBUG_AUTH) console.log('Redirecting new user to profile setup:', setupUrl.toString())
           
@@ -152,7 +154,7 @@ export async function GET(request: NextRequest) {
         
         // If profile exists but no username, redirect to profile setup
         if (!profileData.username) {
-          const setupUrl = new URL(BASE_PATH + '/profile-setup', requestUrl.origin)
+          const setupUrl = new URL(`${BASE_PATH}/profile-setup`, requestUrl.origin)
           
           if (DEBUG_AUTH) console.log('Redirecting to profile setup (no username):', setupUrl.toString())
           
@@ -165,9 +167,8 @@ export async function GET(request: NextRequest) {
       }
     }
     
-    // Set a cookie to indicate successful auth - make sure to redirect to normalized path
-    const finalRedirectPath = normalizedNext === '/' ? BASE_PATH : `${BASE_PATH}${normalizedNext}`
-    const dashboardUrl = new URL(finalRedirectPath, requestUrl.origin)
+    // Set a cookie to indicate successful auth
+    const dashboardUrl = new URL(formattedNext, requestUrl.origin)
     
     // Add a debug parameter to help track where the user came from
     dashboardUrl.searchParams.set('auth_source', 'callback')
@@ -185,7 +186,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Exception in auth callback:', error)
     return NextResponse.redirect(
-      new URL('/login?error=callback_exception', requestUrl.origin + BASE_PATH)
+      new URL(`${BASE_PATH}/login?error=callback_exception`, requestUrl.origin)
     )
   }
 } 
