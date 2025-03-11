@@ -22,6 +22,80 @@ if (!supabaseUrl || !supabaseAnonKey) {
   }
 }
 
+// Custom fetch implementation to work around Next.js caching issues
+const customFetch = async (url: RequestInfo | URL, options?: RequestInit) => {
+  try {
+    // Add a cache-busting parameter to avoid Next.js caching
+    const urlObj = new URL(url.toString());
+    urlObj.searchParams.append('_t', Date.now().toString());
+    
+    // Use the global fetch with the modified URL
+    const response = await fetch(urlObj.toString(), {
+      ...options,
+      // Ensure we're not using Next.js cache
+      cache: 'no-store',
+      next: { revalidate: 0 }
+    });
+    
+    return response;
+  } catch (error) {
+    console.error('Supabase fetch error:', error);
+    throw error;
+  }
+};
+
+// Helper function to use MCP for data access when available
+export const mcpQuery = async (query: string, params?: any[]) => {
+  try {
+    if (typeof window === 'undefined') {
+      // For server-side, use direct PostgreSQL connection
+      // This is handled by the backend
+      return null;
+    }
+    
+    // Use MCP client if it's available
+    // @ts-ignore - MCP global is injected by Cursor
+    if (typeof window !== 'undefined' && window.mcp && window.mcp.query) {
+      // @ts-ignore
+      const result = await window.mcp.query(query, params);
+      console.log('MCP query executed successfully:', query.substring(0, 50) + (query.length > 50 ? '...' : ''));
+      return result;
+    }
+    
+    // If MCP isn't available, try to use our custom MCP server
+    const mcpUrl = process.env.NEXT_PUBLIC_MCP_URL || 'http://localhost:8765';
+    try {
+      const response = await fetch(`${mcpUrl}/query`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query, params: params || [] }),
+        // Ensure we're not using Next.js cache
+        cache: 'no-store',
+        next: { revalidate: 0 }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`MCP server responded with status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log('Custom MCP server query executed successfully');
+      return result;
+    } catch (mcpServerError) {
+      console.warn('Custom MCP server error:', mcpServerError);
+      console.warn('Falling back to Supabase API');
+    }
+    
+    console.warn('MCP not available, SQL queries will be executed via Supabase API');
+    return null;
+  } catch (error) {
+    console.error('MCP query error:', error);
+    return null;
+  }
+};
+
 // Create Supabase client with consistent auth settings for admin client
 const authConfig = {
   auth: {
@@ -31,6 +105,9 @@ const authConfig = {
     detectSessionInUrl: true,
     storage: typeof window !== 'undefined' ? window.localStorage : undefined,
     storageKey: 'supabase-auth',
+  },
+  global: {
+    fetch: customFetch
   }
 }
 
@@ -50,10 +127,16 @@ export const supabase = typeof window !== 'undefined'
         name: 'supabase-auth',
         path: '/',
         sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production'
+        secure: process.env.NODE_ENV === 'production',
+      },
+      // Custom options need to be passed differently for createClientComponentClient
+      options: {
+        global: {
+          fetch: customFetch
+        }
       }
     })
-  : supabaseAdmin // Fallback for server contexts
+  : supabaseAdmin
 
 // Initialize session and set up error recovery
 if (typeof window !== 'undefined') {

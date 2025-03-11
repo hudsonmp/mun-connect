@@ -53,6 +53,15 @@ def create_app(config_name="default"):
     from app.core.errors import register_error_handlers
     register_error_handlers(app)
     
+    # Initialize Supabase client (test connection)
+    with app.app_context():
+        try:
+            from app.core.utils import create_supabase_client
+            supabase = create_supabase_client()
+            app.logger.info("Supabase connection established successfully")
+        except Exception as e:
+            app.logger.error(f"Failed to connect to Supabase: {str(e)}")
+    
     # Shell context processor
     @app.shell_context_processor
     def make_shell_context():

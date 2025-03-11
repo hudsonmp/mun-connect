@@ -12,8 +12,9 @@ class ProfileSchema(Schema):
     bio = fields.String(validate=validate.Length(max=500))
     avatar_url = fields.String(validate=validate.Length(max=255))
     country = fields.String(validate=validate.Length(max=100))
+    school = fields.String(validate=validate.Length(max=100))
+    education_level = fields.String(validate=validate.OneOf(["middle_school", "high_school", "university", "other"]))
     interests = fields.List(fields.String())
-    conference_experience = fields.List(fields.String())
     created_at = fields.DateTime(dump_only=True)
     updated_at = fields.DateTime(dump_only=True)
     

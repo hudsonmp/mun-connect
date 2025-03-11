@@ -12,9 +12,9 @@ class Config:
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1)
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=30)
     
-    # Supabase connection
+    # Supabase connection - using exact variable names from .env.local
     SUPABASE_URL = os.environ.get("NEXT_PUBLIC_SUPABASE_URL")
-    SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    SUPABASE_API_KEY = os.environ.get("SUPABASE_API_KEY") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("NEXT_PUBLIC_SUPABASE_ANON_KEY")
     
     # Database connection
     POSTGRES_USER = os.environ.get("POSTGRES_USER", "postgres")

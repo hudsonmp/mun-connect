@@ -27,11 +27,18 @@ def get_profile():
     current_user = get_jwt_identity()
     
     try:
-        # Get user profile
-        profile_response = supabase_request(
-            method="GET",
-            endpoint=f"/rest/v1/profiles?id=eq.{current_user}",
-        )
+        # Get user profile with improved error handling for schema changes
+        try:
+            profile_response = supabase_request(
+                method="GET",
+                endpoint=f"/rest/v1/profiles?id=eq.{current_user}",
+            )
+        except Exception as e:
+            # If there's an issue with the request, try a more basic query
+            current_app.logger.warning(f"Initial profile request failed: {str(e)}")
+            supabase = create_supabase_client()
+            result = supabase.table('profiles').select('id,username,full_name,bio,avatar_url,country,school,education_level,interests').eq('id', current_user).execute()
+            profile_response = result.data
         
         if not profile_response or len(profile_response) == 0:
             raise NotFoundError("User profile not found")
@@ -64,8 +71,9 @@ def update_profile():
         bio (str, optional): User's bio
         avatar_url (str, optional): URL to user's avatar
         country (str, optional): User's country
+        school (str, optional): User's school
+        education_level (str, optional): User's education level
         interests (list, optional): List of user's interests
-        conference_experience (list, optional): List of user's conference experience
         
     Returns:
         JSON: Updated user profile data
@@ -84,9 +92,15 @@ def update_profile():
         if errors:
             raise ValidationFailedError(f"Validation error: {errors}")
         
+        # Ensure we're not sending fields that might cause schema conflicts
+        sanitized_data = {
+            k: v for k, v in data.items() 
+            if k in ['username', 'full_name', 'bio', 'avatar_url', 'country', 'school', 'education_level', 'interests']
+        }
+        
         # Check if username is being updated and if it already exists
-        if "username" in data:
-            username = data["username"]
+        if "username" in sanitized_data:
+            username = sanitized_data["username"]
             existing_user = supabase_request(
                 method="GET",
                 endpoint=f"/rest/v1/profiles?username=eq.{username}&id=neq.{current_user}",
@@ -95,21 +109,34 @@ def update_profile():
             if existing_user and len(existing_user) > 0:
                 raise ConflictError("Username already exists")
         
-        # Update profile in Supabase
-        update_response = supabase_request(
-            method="PATCH",
-            endpoint=f"/rest/v1/profiles?id=eq.{current_user}",
-            data={
-                **data,
-                "updated_at": "now()",
-            },
-        )
+        # Add updated timestamp
+        sanitized_data['updated_at'] = 'now()'
+        
+        # Update profile in Supabase with better error handling
+        try:
+            update_response = supabase_request(
+                method="PATCH",
+                endpoint=f"/rest/v1/profiles?id=eq.{current_user}",
+                data=sanitized_data
+            )
+        except Exception as e:
+            # If the PATCH request fails, try a more targeted approach
+            current_app.logger.warning(f"Initial update request failed: {str(e)}")
+            supabase = create_supabase_client()
+            update_response = supabase.table('profiles').update(sanitized_data).eq('id', current_user).execute()
         
         # Get updated profile
-        profile_response = supabase_request(
-            method="GET",
-            endpoint=f"/rest/v1/profiles?id=eq.{current_user}",
-        )
+        try:
+            profile_response = supabase_request(
+                method="GET",
+                endpoint=f"/rest/v1/profiles?id=eq.{current_user}",
+            )
+        except Exception as e:
+            # If there's an issue with the request, try a more basic query
+            current_app.logger.warning(f"Post-update profile request failed: {str(e)}")
+            supabase = create_supabase_client()
+            result = supabase.table('profiles').select('id,username,full_name,bio,avatar_url,country,school,education_level,interests').eq('id', current_user).execute()
+            profile_response = result.data
         
         if not profile_response or len(profile_response) == 0:
             raise NotFoundError("User profile not found")
@@ -119,13 +146,10 @@ def update_profile():
         # Serialize profile data
         result = profile_schema.dump(profile)
         
-        return jsonify({
-            "message": "Profile updated successfully",
-            "profile": result,
-        }), 200
+        return jsonify(result), 200
         
     except Exception as e:
-        if isinstance(e, (BadRequestError, NotFoundError, ValidationFailedError, ConflictError)):
+        if isinstance(e, (NotFoundError, ConflictError, ValidationFailedError)):
             raise
         current_app.logger.error(f"Error updating profile: {str(e)}")
         raise BadRequestError("Failed to update profile")
@@ -175,78 +199,92 @@ def search_profiles():
     Search for user profiles.
     
     Query parameters:
-        q (str, optional): Search query for username or full name
-        country (str, optional): Filter by country
-        interests (str, optional): Filter by interests (comma-separated)
-        page (int, optional): Page number (default: 1)
-        per_page (int, optional): Items per page (default: 20, max: 50)
+        q (str, optional): Search query
+        page (int, optional): Page number
+        per_page (int, optional): Number of results per page
         
     Returns:
-        JSON: List of user profiles
+        JSON: Paginated list of user profiles
     """
+    search_query = request.args.get("q", "")
+    page = int(request.args.get("page", 1))
+    per_page = min(int(request.args.get("per_page", 10)), 50)  # Limit to 50 max results
+    
     try:
-        # Get query parameters
-        query = request.args.get("q", "")
-        country = request.args.get("country", "")
-        interests = request.args.get("interests", "").split(",") if request.args.get("interests") else []
-        page = max(1, int(request.args.get("page", 1)))
-        per_page = min(50, max(1, int(request.args.get("per_page", 20))))
+        # Build search query
+        offset = (page - 1) * per_page
         
-        # Build query
-        endpoint = "/rest/v1/profiles"
-        params = {
-            "select": "id,username,full_name,bio,avatar_url,country,interests,conference_experience",
-            "order": "username.asc",
-            "limit": per_page,
-            "offset": (page - 1) * per_page,
-        }
+        # Try using the improved search approach with error handling
+        try:
+            # Use ilike for case-insensitive search
+            search_condition = ""
+            if search_query:
+                search_condition = f"&or=(username.ilike.*{search_query}*,full_name.ilike.*{search_query}*)"
+            
+            profiles_response = supabase_request(
+                method="GET",
+                endpoint=f"/rest/v1/profiles?order=username{search_condition}&limit={per_page}&offset={offset}",
+                headers={
+                    "Range-Unit": "items",
+                    "Range": f"{offset}-{offset+per_page-1}",
+                    "Prefer": "count=exact"
+                }
+            )
+            
+            # Get total count from response headers
+            total = 0
+            
+            # Since we're using the direct supabase_request, we don't have access to headers
+            # We'll need to make a separate count query
+            count_response = supabase_request(
+                method="GET",
+                endpoint=f"/rest/v1/profiles?select=count{search_condition}"
+            )
+            
+            if count_response and len(count_response) > 0:
+                total = count_response[0].get("count", 0)
+            
+        except Exception as e:
+            # If there's an issue with the request, try using create_supabase_client directly
+            current_app.logger.warning(f"Initial profiles search request failed: {str(e)}")
+            supabase = create_supabase_client()
+            
+            # Build query
+            query = supabase.table('profiles').select('id,username,full_name,bio,avatar_url,country,school,education_level,interests')
+            
+            # Apply search if provided
+            if search_query:
+                query = query.or_(f'username.ilike.%{search_query}%,full_name.ilike.%{search_query}%')
+            
+            # Get paginated results
+            result = query.range(offset, offset + per_page - 1).execute()
+            profiles_response = result.data
+            
+            # Get count
+            count_result = supabase.table('profiles').select('count', count='exact')
+            if search_query:
+                count_result = count_result.or_(f'username.ilike.%{search_query}%,full_name.ilike.%{search_query}%')
+            total = count_result.execute().count or 0
         
-        # Add filters
-        filters = []
+        # Calculate pagination metadata
+        pages = (total + per_page - 1) // per_page if total > 0 else 0
         
-        if query:
-            filters.append(f"username.ilike.%{query}%,full_name.ilike.%{query}%")
+        # Serialize profiles data
+        profile_schema = ProfileSchema(many=True)
+        profiles = profile_schema.dump(profiles_response)
         
-        if country:
-            filters.append(f"country.eq.{country}")
-        
-        if interests:
-            for interest in interests:
-                if interest:
-                    filters.append(f"interests.cs.{{{interest}}}")
-        
-        if filters:
-            params["or"] = "(" + ",".join(filters) + ")"
-        
-        # Get profiles
-        profiles_response = supabase_request(
-            method="GET",
-            endpoint=endpoint,
-            params=params,
-        )
-        
-        # Get total count
-        count_response = supabase_request(
-            method="GET",
-            endpoint=f"{endpoint}/count",
-            params={"count": "exact"},
-        )
-        
-        total = count_response.get("count", 0)
-        
-        # Serialize profiles
-        profile_schema = ProfileSchema(exclude=["created_at", "updated_at"], many=True)
-        results = profile_schema.dump(profiles_response)
-        
-        return jsonify({
-            "data": results,
+        # Return paginated response
+        response = {
+            "data": profiles,
             "meta": {
                 "page": page,
                 "per_page": per_page,
                 "total": total,
-                "pages": (total + per_page - 1) // per_page,
+                "pages": pages
             }
-        }), 200
+        }
+        
+        return jsonify(response), 200
         
     except Exception as e:
         current_app.logger.error(f"Error searching profiles: {str(e)}")
