@@ -20,6 +20,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { LayoutDashboard, FileText, Search, Mic, Settings, LogOut, Globe, BookOpen, User } from "lucide-react"
 import { ModeToggle } from "./mode-toggle"
 import { UserNav } from "./user-nav"
+import { useAuth } from "@/lib/auth-context"
+import { useRouter } from "next/navigation"
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -50,17 +52,35 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 }
 
 function DashboardSidebar() {
+  const { user, signOut } = useAuth()
+  const router = useRouter()
+
+  const handleSignOut = async () => {
+    try {
+      await signOut()
+    } catch (error) {
+      console.error("Error signing out:", error)
+    }
+  }
+
+  // Get initials for avatar fallback
+  const getInitials = () => {
+    if (!user?.email) return "U"
+    const email = user.email
+    return email.substring(0, 2).toUpperCase()
+  }
+
   return (
     <Sidebar>
       <SidebarHeader>
         <div className="flex items-center gap-2 px-4 py-2">
           <Avatar className="h-8 w-8">
             <AvatarImage src="/placeholder.svg?height=32&width=32" alt="Avatar" />
-            <AvatarFallback>SC</AvatarFallback>
+            <AvatarFallback>{getInitials()}</AvatarFallback>
           </Avatar>
           <div className="flex flex-col">
-            <span className="text-sm font-medium">Sarah Chen</span>
-            <span className="text-xs text-muted-foreground">Harvard University</span>
+            <span className="text-sm font-medium">{user?.email?.split('@')[0] || "User"}</span>
+            <span className="text-xs text-muted-foreground">{user?.email?.split('@')[1] || ""}</span>
           </div>
         </div>
       </SidebarHeader>
@@ -139,11 +159,9 @@ function DashboardSidebar() {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild>
-              <a href="/logout">
-                <LogOut className="h-4 w-4" />
-                <span>Logout</span>
-              </a>
+            <SidebarMenuButton onClick={handleSignOut}>
+              <LogOut className="h-4 w-4" />
+              <span>Logout</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

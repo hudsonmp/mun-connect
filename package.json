@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "init-db": "cd backend && bash init_db.sh",
+    "backend": "cd backend && bash run.sh",
+    "dev:all": "concurrently \"npm run dev\" \"npm run backend\""
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.3",
@@ -36,8 +39,10 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^8.2.2",
     "eslint": "^9",
     "eslint-config-next": "15.2.4",
+    "supabase": "^2.20.5",
     "tailwindcss": "^4.0.17",
     "typescript": "^5"
   }
