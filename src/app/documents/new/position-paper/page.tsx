@@ -1,16 +1,22 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
-import { ChevronLeft, ChevronRight, Upload, FileText, Sparkles } from "lucide-react"
+import { ChevronLeft, ChevronRight, Upload, FileText, Sparkles, Save } from "lucide-react"
 import { motion } from "framer-motion"
+import { useToast } from "@/components/ui/use-toast"
+import { useAuth } from "@/lib/auth-context"
+import { useRouter } from "next/navigation"
+import { RichTextEditor } from "@/components/rich-text-editor"
+import { Toaster } from "@/components/ui/toaster"
 
 // Mock data
 const conferences = [
@@ -44,15 +50,69 @@ const templates = [
 ]
 
 export default function NewPositionPaper() {
+  const { user, isLoading: authLoading } = useAuth()
+  const router = useRouter()
+  const { toast } = useToast()
   const [step, setStep] = useState(1)
+  const [isLoading, setIsLoading] = useState(false)
+  const [generatedContent, setGeneratedContent] = useState("")
+  const [userConferences, setUserConferences] = useState<any[]>([])
+  const [isEditorReady, setIsEditorReady] = useState(false)
+  
   const [formData, setFormData] = useState({
     conference: "",
     committee: "",
     topic: "",
     country: "",
-    backgroundGuide: null,
-    template: "",
+    backgroundText: "",
+    template: "Standard Position Paper",
+    customRequirements: "",
   })
+
+  // Debug auth state
+  useEffect(() => {
+    console.log("Auth state in Position Paper:", { user, authLoading })
+  }, [user, authLoading])
+
+  // Fetch user's conferences for selection
+  useEffect(() => {
+    // Only proceed if authentication is done loading
+    if (authLoading) return
+    
+    // If user is not authenticated after auth loading is complete, redirect
+    if (!user && !authLoading) {
+      console.log("User not authenticated, redirecting to login")
+      router.push('/auth/login')
+      return
+    }
+    
+    const fetchConferences = async () => {
+      try {
+        console.log("Fetching conferences with user ID:", user?.id)
+        const response = await fetch(`/api/conferences?userId=${user?.id}`)
+        if (response.ok) {
+          const data = await response.json()
+          setUserConferences(data || [])
+        } else {
+          const errorData = await response.json()
+          console.error("Error fetching conferences:", errorData)
+        }
+      } catch (err) {
+        console.error("Exception fetching conferences:", err)
+      }
+    }
+    
+    if (user) {
+      fetchConferences()
+    }
+  }, [user, router, authLoading])
+
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/auth/login')
+    }
+  }, [user, authLoading, router])
 
   const handleNext = () => {
     setStep(step + 1)
@@ -69,6 +129,185 @@ export default function NewPositionPaper() {
     })
   }
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target
+    setFormData({
+      ...formData,
+      [name]: value,
+    })
+  }
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return
+    
+    const file = e.target.files[0]
+    const reader = new FileReader()
+    
+    reader.onload = (e) => {
+      if (e.target && typeof e.target.result === "string") {
+        setFormData({
+          ...formData,
+          backgroundText: e.target.result
+        })
+      }
+    }
+    
+    reader.readAsText(file)
+  }
+
+  const generatePositionPaper = async () => {
+    if (!user || !user.id) {
+      console.error("User not authenticated or missing ID:", user)
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to generate a position paper",
+        variant: "destructive",
+      })
+      return
+    }
+    
+    // Validate form
+    if (!formData.conference || !formData.committee || !formData.topic || !formData.country) {
+      toast({
+        title: "Missing information",
+        description: "Please fill out all required fields",
+        variant: "destructive",
+      })
+      return
+    }
+    
+    setIsLoading(true)
+    console.log("Generating position paper with user ID:", user.id)
+    
+    try {
+      const requestData = {
+        conference: formData.conference,
+        committee: formData.committee,
+        topic: formData.topic,
+        country: formData.country,
+        background_text: formData.backgroundText,
+        template: formData.template,
+        custom_requirements: formData.customRequirements,
+        user_id: user.id, // Include in body as fallback
+      }
+      
+      console.log("Request data:", requestData)
+      
+      const response = await fetch("/api/ai/generate-position-paper", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "user-id": user.id,
+        },
+        body: JSON.stringify(requestData),
+      })
+      
+      console.log("Response status:", response.status)
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error("Position paper generation error:", errorData)
+        throw new Error(errorData.error || "Failed to generate position paper")
+      }
+      
+      const data = await response.json()
+      console.log("Position paper generated successfully")
+      setGeneratedContent(data.content)
+      
+      toast({
+        title: "Position paper generated",
+        description: "Your position paper has been successfully generated",
+      })
+      
+      // Move to edit mode
+      setStep(5)
+    } catch (error: any) {
+      console.error("Position paper generation exception:", error)
+      toast({
+        title: "Error generating position paper",
+        description: error.message || "An unexpected error occurred",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const saveDocument = async (content: string) => {
+    if (!user || !user.id) {
+      console.error("User not authenticated or missing ID:", user)
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to save your document",
+        variant: "destructive",
+      })
+      return
+    }
+    
+    try {
+      setIsLoading(true)
+      console.log("Saving document with user ID:", user.id)
+      
+      const response = await fetch(`/api/documents/new`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "user-id": user.id,
+        },
+        body: JSON.stringify({
+          title: `${formData.country} - ${formData.topic}`,
+          type: "Position Paper",
+          committee: formData.committee,
+          conference: formData.conference,
+          content: content,
+          progress: 100,
+          user_id: user.id, // Include in body as fallback
+        }),
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error("Document save error:", errorData)
+        throw new Error(errorData.error || "Failed to save document")
+      }
+      
+      toast({
+        title: "Document saved",
+        description: "Your position paper has been saved successfully",
+      })
+      
+      // Redirect to the documents page
+      router.push('/documents')
+    } catch (error: any) {
+      console.error("Document save exception:", error)
+      toast({
+        title: "Error saving document",
+        description: error.message || "An unexpected error occurred",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Show loading state while authentication is being checked
+  if (authLoading) {
+    return (
+      <DashboardLayout>
+        <div className="container mx-auto max-w-4xl py-6">
+          <div className="flex flex-col items-center justify-center h-96">
+            <p className="text-muted-foreground">Loading...</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
+  // Don't render main content if user is not authenticated
+  if (!user) {
+    return null // Will redirect in useEffect
+  }
+
   return (
     <DashboardLayout>
       <div className="container mx-auto max-w-4xl py-6">
@@ -81,22 +320,24 @@ export default function NewPositionPaper() {
           <p className="text-muted-foreground mt-1">Generate a position paper for your MUN conference</p>
         </div>
 
-        <div className="relative mb-8">
-          <div className="absolute left-0 top-1/2 h-0.5 w-full -translate-y-1/2 bg-muted"></div>
-          <ol className="relative z-10 flex justify-between">
-            {[1, 2, 3, 4].map((i) => (
-              <li key={i} className="flex items-center justify-center">
-                <div
-                  className={`flex h-10 w-10 items-center justify-center rounded-full border-2 ${
-                    step >= i ? "border-primary bg-primary text-primary-foreground" : "border-muted bg-background"
-                  }`}
-                >
-                  {i}
-                </div>
-              </li>
-            ))}
-          </ol>
-        </div>
+        {step < 5 && (
+          <div className="relative mb-8">
+            <div className="absolute left-0 top-1/2 h-0.5 w-full -translate-y-1/2 bg-muted"></div>
+            <ol className="relative z-10 flex justify-between">
+              {[1, 2, 3, 4].map((i) => (
+                <li key={i} className="flex items-center justify-center">
+                  <div
+                    className={`flex h-10 w-10 items-center justify-center rounded-full border-2 ${
+                      step >= i ? "border-primary bg-primary text-primary-foreground" : "border-muted bg-background"
+                    }`}
+                  >
+                    {i}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
 
         {step === 1 && (
           <motion.div
@@ -108,68 +349,67 @@ export default function NewPositionPaper() {
             <Card>
               <CardHeader>
                 <CardTitle>Conference Details</CardTitle>
-                <CardDescription>Select the conference, committee, topic, and your country/character</CardDescription>
+                <CardDescription>Enter the conference, committee, topic, and your country/character</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="conference">Conference</Label>
-                  <Select value={formData.conference} onValueChange={(value) => handleChange("conference", value)}>
-                    <SelectTrigger id="conference">
-                      <SelectValue placeholder="Select conference" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {conferences.map((conference) => (
-                        <SelectItem key={conference.id} value={conference.name}>
-                          {conference.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="conference">Conference *</Label>
+                  {userConferences.length > 0 ? (
+                    <Select value={formData.conference} onValueChange={(value) => handleChange("conference", value)}>
+                      <SelectTrigger id="conference">
+                        <SelectValue placeholder="Select conference" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {userConferences.map((conference) => (
+                          <SelectItem key={conference.id} value={conference.name}>
+                            {conference.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      id="conference"
+                      name="conference"
+                      placeholder="Harvard National Model United Nations"
+                      value={formData.conference}
+                      onChange={handleInputChange}
+                      required
+                    />
+                  )}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="committee">Committee</Label>
-                  <Select value={formData.committee} onValueChange={(value) => handleChange("committee", value)}>
-                    <SelectTrigger id="committee">
-                      <SelectValue placeholder="Select committee" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {committees.map((committee) => (
-                        <SelectItem key={committee.id} value={committee.name}>
-                          {committee.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="committee">Committee *</Label>
+                  <Input
+                    id="committee"
+                    name="committee"
+                    placeholder="UN Security Council"
+                    value={formData.committee}
+                    onChange={handleInputChange}
+                    required
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="topic">Topic</Label>
-                  <Select value={formData.topic} onValueChange={(value) => handleChange("topic", value)}>
-                    <SelectTrigger id="topic">
-                      <SelectValue placeholder="Select topic" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {topics.map((topic) => (
-                        <SelectItem key={topic.id} value={topic.name}>
-                          {topic.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="topic">Topic *</Label>
+                  <Input
+                    id="topic"
+                    name="topic"
+                    placeholder="Climate Change and Environmental Security"
+                    value={formData.topic}
+                    onChange={handleInputChange}
+                    required
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="country">Country/Character</Label>
-                  <Select value={formData.country} onValueChange={(value) => handleChange("country", value)}>
-                    <SelectTrigger id="country">
-                      <SelectValue placeholder="Select country/character" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {countries.map((country) => (
-                        <SelectItem key={country.id} value={country.name}>
-                          {country.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="country">Country/Character *</Label>
+                  <Input
+                    id="country"
+                    name="country"
+                    placeholder="France"
+                    value={formData.country}
+                    onChange={handleInputChange}
+                    required
+                  />
                 </div>
               </CardContent>
               <CardFooter className="flex justify-end">
@@ -197,7 +437,7 @@ export default function NewPositionPaper() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <Tabs defaultValue="upload">
+                <Tabs defaultValue="paste">
                   <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="upload">Upload Document</TabsTrigger>
                     <TabsTrigger value="paste">Paste Text</TabsTrigger>
@@ -213,19 +453,28 @@ export default function NewPositionPaper() {
                           <p className="mb-2 text-sm text-muted-foreground">
                             <span className="font-semibold">Click to upload</span> or drag and drop
                           </p>
-                          <p className="text-xs text-muted-foreground">PDF or DOCX (MAX. 10MB)</p>
+                          <p className="text-xs text-muted-foreground">TXT, PDF or DOCX (MAX. 10MB)</p>
                         </div>
-                        <input id="dropzone-file" type="file" className="hidden" />
+                        <input 
+                          id="dropzone-file" 
+                          type="file" 
+                          className="hidden" 
+                          accept=".txt,.pdf,.docx" 
+                          onChange={handleFileUpload}
+                        />
                       </label>
                     </div>
                   </TabsContent>
                   <TabsContent value="paste" className="space-y-4 pt-4">
                     <div className="space-y-2">
-                      <Label htmlFor="background-text">Background Information</Label>
+                      <Label htmlFor="backgroundText">Background Information</Label>
                       <Textarea
-                        id="background-text"
+                        id="backgroundText"
+                        name="backgroundText"
                         placeholder="Paste background information or research notes here..."
                         className="min-h-[200px]"
+                        value={formData.backgroundText}
+                        onChange={handleInputChange}
                       />
                     </div>
                   </TabsContent>
@@ -261,7 +510,11 @@ export default function NewPositionPaper() {
                 <div className="space-y-4">
                   <Label>Select Template</Label>
                   <div className="grid gap-4 md:grid-cols-3">
-                    {templates.map((template) => (
+                    {[
+                      { id: 1, name: "Standard Position Paper", description: "Traditional format with introduction, body, and conclusion" },
+                      { id: 2, name: "Harvard Style", description: "Specific format required for Harvard MUN conferences" },
+                      { id: 3, name: "Detailed Analysis", description: "In-depth analysis with policy recommendations" },
+                    ].map((template) => (
                       <div
                         key={template.id}
                         className={`cursor-pointer rounded-lg border p-4 transition-all hover:border-primary ${
@@ -280,11 +533,14 @@ export default function NewPositionPaper() {
                 </div>
                 <Separator className="my-4" />
                 <div className="space-y-2">
-                  <Label htmlFor="custom-requirements">Custom Requirements (Optional)</Label>
+                  <Label htmlFor="customRequirements">Custom Requirements (Optional)</Label>
                   <Textarea
-                    id="custom-requirements"
+                    id="customRequirements"
+                    name="customRequirements"
                     placeholder="Enter any specific formatting requirements for your position paper..."
                     className="min-h-[100px]"
+                    value={formData.customRequirements}
+                    onChange={handleInputChange}
                   />
                 </div>
               </CardContent>
@@ -338,6 +594,10 @@ export default function NewPositionPaper() {
                       <span className="text-muted-foreground">Template:</span>
                       <span className="col-span-2 font-medium">{formData.template || "Not selected"}</span>
                     </div>
+                    <div className="grid grid-cols-3">
+                      <span className="text-muted-foreground">Background Info:</span>
+                      <span className="col-span-2 font-medium">{formData.backgroundText ? "Provided" : "Not provided"}</span>
+                    </div>
                   </div>
                 </div>
                 <div className="rounded-lg border p-4">
@@ -360,15 +620,48 @@ export default function NewPositionPaper() {
                   <ChevronLeft className="mr-2 h-4 w-4" />
                   Back
                 </Button>
-                <Button>
+                <Button onClick={generatePositionPaper} disabled={isLoading}>
                   <Sparkles className="mr-2 h-4 w-4" />
-                  Generate Position Paper
+                  {isLoading ? "Generating..." : "Generate Position Paper"}
+                </Button>
+              </CardFooter>
+            </Card>
+          </motion.div>
+        )}
+
+        {step === 5 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <Card>
+              <CardHeader>
+                <CardTitle>Edit Position Paper</CardTitle>
+                <CardDescription>Review and make changes to your generated position paper</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <RichTextEditor
+                  initialValue={generatedContent}
+                  height={600}
+                  onChange={(content) => setGeneratedContent(content)}
+                />
+              </CardContent>
+              <CardFooter className="flex justify-between">
+                <Button variant="outline" onClick={() => setStep(4)}>
+                  <ChevronLeft className="mr-2 h-4 w-4" />
+                  Back
+                </Button>
+                <Button onClick={() => saveDocument(generatedContent)} disabled={isLoading}>
+                  <Save className="mr-2 h-4 w-4" />
+                  {isLoading ? "Saving..." : "Save Document"}
                 </Button>
               </CardFooter>
             </Card>
           </motion.div>
         )}
       </div>
+      <Toaster />
     </DashboardLayout>
   )
 }

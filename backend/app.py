@@ -2,9 +2,14 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
 import db
+import openai
+from datetime import datetime
 
 app = Flask(__name__)
 CORS(app)
+
+# Initialize OpenAI client
+openai.api_key = os.environ.get("OPENAI_API_KEY")
 
 # Authentication routes
 @app.route('/api/auth/signup', methods=['POST'])
@@ -261,7 +266,88 @@ def update_awards():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-# AI features placeholder
+# AI routes
+@app.route('/api/ai/generate-position-paper', methods=['POST'])
+def generate_position_paper():
+    try:
+        user_id = request.headers.get('user-id')
+        if not user_id:
+            return jsonify({"error": "User ID required"}), 400
+        
+        data = request.json
+        
+        # Extract data for prompt
+        conference = data.get('conference', '')
+        committee = data.get('committee', '')
+        topic = data.get('topic', '')
+        country = data.get('country', '')
+        template = data.get('template', 'Standard Position Paper')
+        background_text = data.get('background_text', '')
+        custom_requirements = data.get('custom_requirements', '')
+        
+        # Construct the prompt
+        prompt = f"""
+            You are an expert in Model United Nations and international relations. Write a comprehensive position paper for {country} in the {committee} committee at {conference} on the topic of {topic}.
+
+            Format this position paper following the {template} format, with clear sections including:
+            1. Introduction with country background
+            2. Country's position on the topic
+            3. Past international actions
+            4. Proposed solutions
+            5. Conclusion
+
+            Make sure the paper is written in a formal, diplomatic style appropriate for a Model UN conference.
+            
+            Additional background information:
+            {background_text}
+            
+            Custom formatting requirements:
+            {custom_requirements}
+        """
+        
+        # Make the OpenAI API call
+        response = openai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an expert assistant that helps students write high-quality position papers for Model United Nations conferences."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=2500
+        )
+        
+        # Extract the generated text
+        generated_text = response.choices[0].message.content
+        
+        # Create a document in the database
+        document_data = {
+            "title": f"{country} - {topic}",
+            "type": "Position Paper",
+            "committee": committee,
+            "conference": conference,
+            "content": generated_text,
+            "progress": 100,
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
+        }
+        
+        document_response = db.create_document(user_id, document_data)
+        
+        # Update user stats
+        stats = db.get_user_stats(user_id).data
+        db.update_user_stats(user_id, {
+            "documents_count": stats.get("documents_count", 0) + 1
+        })
+        
+        # Return the document and content
+        return jsonify({
+            "document": document_response.data[0] if document_response.data else None,
+            "content": generated_text
+        }), 201
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/ai/generate-document', methods=['POST'])
 def generate_document():
     # This is a placeholder for AI document generation

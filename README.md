@@ -1,89 +1,80 @@
 # MUN Connect
 
-MUN Connect is a platform for Model United Nations participants to manage their conferences, documents, and track their progress. This application uses Next.js for the frontend and Supabase with Python for the backend.
+A comprehensive platform for Model United Nations participants to manage conferences, create position papers, speeches, and resolutions.
 
 ## Features
 
-- User authentication (signup, login, password reset)
-- Conference management
-- Document management (position papers, resolutions, speeches)
-- User statistics
-- Dark/light mode support
-- Responsive design
+- **Conference Management**: Keep track of upcoming, active, and past MUN conferences
+- **Document Creation**: Generate and edit position papers, speeches, and resolutions
+- **AI-Powered Assistance**: Generate position papers tailored to your committee and country
+- **Research Tools**: Research countries, topics, and committees
+- **Profile Management**: Track your MUN achievements and awards
 
-## Technology Stack
+## Tech Stack
 
-- **Frontend**: Next.js, React, TypeScript, Tailwind CSS
-- **Backend**: Supabase, Python, Flask
+- **Frontend**: Next.js, React, TypeScript, Tailwind CSS, shadcn/ui
+- **Backend**: Flask (Python), OpenAI API
 - **Database**: PostgreSQL (via Supabase)
 - **Authentication**: Supabase Auth
+- **Rich Text Editing**: TinyMCE
 
-## Prerequisites
+## Setup Instructions
 
-- Node.js (v18 or later)
-- Python (v3.8 or later)
-- Supabase CLI
-- Local Supabase instance running
+### Prerequisites
 
-## Installation
+- Node.js 18+ 
+- Python 3.10+
+- Supabase account
+- OpenAI API key
+- TinyMCE API key
 
-1. Clone the repository:
+### Environment Setup
 
-```bash
-git clone <repository-url>
-cd mun-connect
+1. Clone the repository
+2. Create a `.env` file in the root directory with the following variables:
+
+```
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+
+# OpenAI
+OPENAI_API_KEY=your_openai_api_key
+
+# TinyMCE
+NEXT_PUBLIC_TINYMCE_KEY=your_tinymce_key
+
+# Database direct connection (for migrations)
+DATABASE_URL=your_postgres_connection_string
 ```
 
-2. Install Node.js dependencies:
+### Installation
 
+1. Install frontend dependencies:
 ```bash
 npm install
 ```
 
-3. Install Python dependencies:
-
+2. Install backend dependencies:
 ```bash
 cd backend
 pip install -r requirements.txt
-cd ..
 ```
 
-4. Create a `.env` file in the root directory with the following variables:
-
-```
-NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
-SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>
-DATABASE_URL=postgresql://postgres:postgres@localhost:54322/postgres
-```
-
-## Setting Up the Database
-
-Initialize the database schema and seed data:
-
+3. Initialize the database:
 ```bash
 npm run init-db
 ```
 
-This will:
-- Connect to your local Supabase instance
-- Create the necessary tables (conferences, documents, user_stats)
-- Set up Row Level Security policies
-- Create functions and triggers
-- Seed sample data for testing
-
-## Running the Application
-
 ### Development
 
-Run both the frontend and backend concurrently:
-
+Run both frontend and backend servers:
 ```bash
 npm run dev:all
 ```
 
-Or run them separately:
-
+Or separately:
 ```bash
 # Frontend only
 npm run dev
@@ -92,83 +83,18 @@ npm run dev
 npm run backend
 ```
 
-### Production
+## Usage
 
-Build the application:
+1. Register a new account
+2. Add your MUN conferences
+3. Create position papers, resolutions, or speeches
+4. Use the AI assistant to generate content
+5. Track your progress and achievements
 
-```bash
-npm run build
-```
+## Contributing
 
-Start the production server:
-
-```bash
-npm run start
-```
-
-## Authentication Flow
-
-1. Users can sign up with email and password
-2. Email verification is handled by Supabase
-3. Users can log in with their credentials
-4. Session management is handled by our auth context
-
-## Project Structure
-
-```
-mun-connect/
-├── backend/          # Python backend code
-│   ├── app.py        # Flask application
-│   ├── db.py         # Supabase client and database operations
-│   ├── schema.py     # Database schema definition
-│   ├── init_db.sh    # Database initialization script
-│   ├── run.sh        # Script to run the Flask server
-│   └── requirements.txt  # Python dependencies
-├── supabase/         # Supabase configuration
-├── src/
-│   ├── app/          # Next.js app router pages
-│   │   ├── api/      # Next.js API routes
-│   │   ├── auth/     # Authentication pages
-│   │   └── page.tsx  # Main dashboard page
-│   ├── components/   # React components
-│   ├── lib/          # Utility functions and hooks
-│   └── hooks/        # Custom React hooks
-├── public/           # Static assets
-└── package.json      # Node.js dependencies and scripts
-```
-
-## API Endpoints
-
-### Authentication
-- `POST /api/auth/signup` - Create a new user
-- `POST /api/auth/signin` - Log in a user
-- `POST /api/auth/signout` - Log out a user
-- `POST /api/auth/reset-password` - Send a password reset link
-
-### Conferences
-- `GET /api/conferences` - Get all conferences for a user
-- `POST /api/conferences` - Create a new conference
-- `GET /api/conferences/:id` - Get a specific conference
-- `PUT /api/conferences/:id` - Update a conference
-- `DELETE /api/conferences/:id` - Delete a conference
-
-### Documents
-- `GET /api/documents` - Get all documents for a user
-- `POST /api/documents` - Create a new document
-- `GET /api/documents/:id` - Get a specific document
-- `PUT /api/documents/:id` - Update a document
-- `DELETE /api/documents/:id` - Delete a document
-
-### User Stats
-- `GET /api/user-stats` - Get user stats
-- `PUT /api/user-stats/awards` - Update user awards count
-
-## AI Features (Placeholders)
-
-The application includes placeholders for AI features:
-- `POST /api/ai/generate-document` - Generate a document using AI
-- `POST /api/ai/improve-document` - Improve a document using AI
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-[MIT](LICENSE)
+This project is licensed under the MIT License - see the LICENSE file for details.

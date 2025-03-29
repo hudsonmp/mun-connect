@@ -1,8 +1,31 @@
 {
-    "mcpServers": {
-      "supabase": {
-        "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-postgres", "${env:DATABASE_URL}"]
+  "mcpServers": {
+    "supabase": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres", "${env:DATABASE_URL}"]
+    },
+    "openai": {
+      "command": "npx",
+      "args": ["-y", "openai-mcp"],
+      "env": {
+        "OPENAI_API_KEY": "your-openai-api-key"
+      }
+    },
+    "anthropic": {
+      "command": "npx",
+      "args": ["-y", "server-anthropic"],
+      "env": {
+        "ANTHROPIC_API_KEY": "your-anthropic-api-key",
+        "ANTHROPIC_WORKSPACE_ID": "optional-workspace-id"
+      }
+    },
+    "perplexity-mcp": {
+      "command": "uvx",
+      "args": ["perplexity-mcp"],
+      "env": {
+        "PERPLEXITY_API_KEY": "your-perplexity-api-key",
+        "PERPLEXITY_MODEL": "sonar"
       }
     }
   }
+}

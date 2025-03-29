@@ -1,4 +1,14 @@
-import { NextResponse } from "next/server"
+import { NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('Missing Supabase environment variables')
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey)
 
 export async function POST(request: Request) {
   try {
@@ -6,33 +16,43 @@ export async function POST(request: Request) {
 
     if (!email || !password) {
       return NextResponse.json(
-        { error: "Email and password are required" },
+        { error: 'Email and password are required' },
         { status: 400 }
       )
     }
 
-    const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/api/auth/signin`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ email, password }),
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
     })
 
-    const data = await response.json()
-
-    if (!response.ok) {
+    if (error) {
+      console.error('Signin error:', error)
       return NextResponse.json(
-        { error: data.error || "Failed to sign in" },
-        { status: response.status }
+        { error: error.message },
+        { status: error.status || 500 }
       )
     }
 
-    return NextResponse.json(data, { status: 200 })
-  } catch (error) {
-    console.error("Signin error:", error)
+    // Get user profile
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', data.user.id)
+      .single()
+
+    if (profileError) {
+      console.error('Profile fetch error:', profileError)
+    }
+
+    return NextResponse.json({
+      ...data,
+      profile: profile || null
+    })
+  } catch (err: any) {
+    console.error('Error in signin API:', err)
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }

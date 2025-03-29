@@ -9,17 +9,12 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { motion } from "framer-motion"
 import { useAuth } from "@/lib/auth-context"
-import { createClient } from '@supabase/supabase-js'
-
-// Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error('Missing Supabase environment variables')
-}
-
-const supabase = createClient(supabaseUrl, supabaseKey)
+import { useRouter } from 'next/navigation'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useToast } from "@/components/ui/use-toast"
 
 // Types for our data
 interface Conference {
@@ -53,11 +48,25 @@ interface UserStats {
 
 export function DashboardContent() {
   const { user } = useAuth()
+  const router = useRouter()
+  const { toast } = useToast()
   const [conferences, setConferences] = useState<Conference[]>([])
   const [documents, setDocuments] = useState<Document[]>([])
   const [stats, setStats] = useState<UserStats | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  
+  // Add dialog state
+  const [isAddConferenceOpen, setIsAddConferenceOpen] = useState(false)
+  const [conferenceForm, setConferenceForm] = useState({
+    name: "",
+    acronym: "",
+    dates: "",
+    committee: "",
+    role: "",
+    status: "upcoming"
+  })
+  const [isSaving, setIsSaving] = useState(false)
 
   // Format last edited time
   const formatLastEdited = (timestamp: string) => {
@@ -82,53 +91,42 @@ export function DashboardContent() {
   };
 
   useEffect(() => {
-    async function fetchData() {
-      if (!user) {
-        setIsLoading(false)
-        return
-      }
+    // Redirect to login if not authenticated
+    if (!user) {
+      router.push('/auth/login')
+      return
+    }
 
+    async function fetchData() {
       setIsLoading(true)
       setError(null)
 
       try {
-        // Fetch conferences using Supabase client
-        const { data: conferenceData, error: conferenceError } = await supabase
-          .from('conferences')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-
-        if (conferenceError) {
-          console.error('Error fetching conferences:', conferenceError)
-          throw new Error(conferenceError.message || 'Failed to fetch conferences')
+        // Fetch conferences from API
+        const conferencesResponse = await fetch(`/api/conferences?userId=${user.id}`)
+        if (!conferencesResponse.ok) {
+          const errorData = await conferencesResponse.json()
+          throw new Error(errorData.error || 'Failed to fetch conferences')
         }
+        const conferenceData = await conferencesResponse.json()
         setConferences(conferenceData || [])
 
-        // Fetch documents using Supabase client
-        const { data: documentData, error: documentError } = await supabase
-          .from('documents')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-
-        if (documentError) {
-          console.error('Error fetching documents:', documentError)
-          throw new Error(documentError.message || 'Failed to fetch documents')
+        // Fetch documents from API
+        const documentsResponse = await fetch(`/api/documents?userId=${user.id}`)
+        if (!documentsResponse.ok) {
+          const errorData = await documentsResponse.json()
+          throw new Error(errorData.error || 'Failed to fetch documents')
         }
+        const documentData = await documentsResponse.json()
         setDocuments(documentData || [])
 
-        // Fetch user stats using Supabase client
-        const { data: statsData, error: statsError } = await supabase
-          .from('user_stats')
-          .select('*')
-          .eq('user_id', user.id)
-          .single()
-
-        if (statsError && statsError.code !== 'PGRST116') {
-          console.error('Error fetching user stats:', statsError)
-          throw new Error(statsError.message || 'Failed to fetch user stats')
+        // Fetch user stats
+        const statsResponse = await fetch(`/api/user-stats?userId=${user.id}`)
+        if (!statsResponse.ok) {
+          const errorData = await statsResponse.json()
+          throw new Error(errorData.error || 'Failed to fetch user stats')
         }
+        const statsData = await statsResponse.json()
         setStats(statsData || null)
 
       } catch (err: any) {
@@ -140,7 +138,127 @@ export function DashboardContent() {
     }
 
     fetchData()
-  }, [user])
+  }, [user, router])
+
+  // Handle conference form changes
+  const handleConferenceFormChange = (field: string, value: string) => {
+    setConferenceForm({
+      ...conferenceForm,
+      [field]: value
+    })
+  }
+
+  // Handle form input changes directly from input events
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target
+    setConferenceForm({
+      ...conferenceForm,
+      [name]: value
+    })
+  }
+
+  // Submit conference form
+  const handleSubmitConference = async () => {
+    if (!user || !user.id) {
+      console.error("User not authenticated or missing ID:", user);
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to add a conference",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Validate form
+    if (!conferenceForm.name || !conferenceForm.committee || !conferenceForm.role) {
+      toast({
+        title: "Missing information",
+        description: "Please fill out all required fields",
+        variant: "destructive"
+      })
+      return
+    }
+
+    setIsSaving(true)
+    console.log("Submitting conference with user ID:", user.id);
+
+    try {
+      // Create acronym if not provided
+      const acronym = conferenceForm.acronym || conferenceForm.name
+        .split(' ')
+        .map(word => word[0])
+        .join('')
+        .toUpperCase()
+
+      const response = await fetch('/api/conferences', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'user-id': user.id,
+        },
+        body: JSON.stringify({
+          user_id: user.id,
+          name: conferenceForm.name,
+          acronym: acronym,
+          dates: conferenceForm.dates,
+          committee: conferenceForm.committee,
+          role: conferenceForm.role,
+          status: conferenceForm.status,
+          progress: 0
+        })
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to create conference')
+      }
+
+      const newConference = await response.json()
+      
+      // Update conferences list with new conference
+      setConferences([...conferences, newConference])
+      
+      // Reset form
+      setConferenceForm({
+        name: "",
+        acronym: "",
+        dates: "",
+        committee: "",
+        role: "",
+        status: "upcoming"
+      })
+      
+      // Close dialog
+      setIsAddConferenceOpen(false)
+      
+      toast({
+        title: "Conference added",
+        description: "Your conference has been successfully added"
+      })
+      
+      // Update stats if we have them
+      if (stats) {
+        setStats({
+          ...stats,
+          conferences_count: stats.conferences_count + 1
+        })
+      }
+    } catch (err: any) {
+      console.error('Error creating conference:', err)
+      toast({
+        title: "Error adding conference",
+        description: err?.message || "An unexpected error occurred",
+        variant: "destructive"
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  // If not authenticated, don't render anything (will redirect)
+  if (!user) {
+    return null
+  }
 
   // Fallback stats if not loaded yet
   const displayStats = [
@@ -247,7 +365,7 @@ export function DashboardContent() {
                   </div>
                   <h3 className="text-lg font-medium">Add Conference</h3>
                   <p className="text-sm text-muted-foreground">Register a new conference you're participating in</p>
-                  <Button className="mt-2">Add Conference</Button>
+                  <Button className="mt-2" onClick={() => setIsAddConferenceOpen(true)}>Add Conference</Button>
                 </div>
               </Card>
             </motion.div>
@@ -301,6 +419,111 @@ export function DashboardContent() {
           </motion.div>
         </div>
       </div>
+
+      {/* Add Conference Dialog */}
+      <Dialog open={isAddConferenceOpen} onOpenChange={setIsAddConferenceOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Add New Conference</DialogTitle>
+            <DialogDescription>
+              Enter the details of the conference you're participating in.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="name" className="text-right">
+                Name *
+              </Label>
+              <Input
+                id="name"
+                name="name"
+                value={conferenceForm.name}
+                onChange={handleInputChange}
+                className="col-span-3"
+                placeholder="Harvard National Model United Nations"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="acronym" className="text-right">
+                Acronym
+              </Label>
+              <Input
+                id="acronym"
+                name="acronym"
+                value={conferenceForm.acronym}
+                onChange={handleInputChange}
+                className="col-span-3"
+                placeholder="HNMUN"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="dates" className="text-right">
+                Dates
+              </Label>
+              <Input
+                id="dates"
+                name="dates"
+                value={conferenceForm.dates}
+                onChange={handleInputChange}
+                className="col-span-3"
+                placeholder="Feb 10-13, 2024"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="committee" className="text-right">
+                Committee *
+              </Label>
+              <Input
+                id="committee"
+                name="committee"
+                value={conferenceForm.committee}
+                onChange={handleInputChange}
+                className="col-span-3"
+                placeholder="UN Security Council"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="role" className="text-right">
+                Role *
+              </Label>
+              <Input
+                id="role"
+                name="role"
+                value={conferenceForm.role}
+                onChange={handleInputChange}
+                className="col-span-3"
+                placeholder="Delegate of France"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="status" className="text-right">
+                Status
+              </Label>
+              <Select
+                value={conferenceForm.status}
+                onValueChange={(value) => handleConferenceFormChange("status", value)}
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="upcoming">Upcoming</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddConferenceOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSubmitConference} disabled={isSaving}>
+              {isSaving ? "Adding..." : "Add Conference"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

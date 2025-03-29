@@ -20,9 +20,35 @@ def setup_database():
     print("Setting up database schema...")
     
     try:
-        # Create the conferences table
-        print("Creating conferences table...")
+        # Create all tables in a single transaction
         create_table_sql = """
+        -- Create profiles table
+        CREATE TABLE IF NOT EXISTS public.profiles (
+            id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+            email TEXT UNIQUE NOT NULL,
+            full_name TEXT,
+            avatar_url TEXT,
+            school TEXT,
+            grade INTEGER,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+
+        -- Enable RLS for profiles
+        ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+
+        -- Create RLS policies for profiles
+        DROP POLICY IF EXISTS "Users can view their own profile" ON public.profiles;
+        CREATE POLICY "Users can view their own profile"
+        ON public.profiles FOR SELECT
+        USING (auth.uid() = id);
+
+        DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
+        CREATE POLICY "Users can update their own profile"
+        ON public.profiles FOR UPDATE
+        USING (auth.uid() = id);
+
+        -- Create conferences table
         CREATE TABLE IF NOT EXISTS public.conferences (
             id SERIAL PRIMARY KEY,
             user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -37,10 +63,10 @@ def setup_database():
             updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
 
-        -- Enable RLS
+        -- Enable RLS for conferences
         ALTER TABLE public.conferences ENABLE ROW LEVEL SECURITY;
 
-        -- Create RLS policies
+        -- Create RLS policies for conferences
         DROP POLICY IF EXISTS "Users can view their own conferences" ON public.conferences;
         CREATE POLICY "Users can view their own conferences"
         ON public.conferences FOR SELECT
@@ -60,6 +86,96 @@ def setup_database():
         CREATE POLICY "Users can delete their own conferences"
         ON public.conferences FOR DELETE
         USING (auth.uid() = user_id);
+
+        -- Create documents table
+        CREATE TABLE IF NOT EXISTS public.documents (
+            id SERIAL PRIMARY KEY,
+            user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+            title TEXT NOT NULL,
+            type TEXT NOT NULL CHECK (type IN ('Position Paper', 'Resolution', 'Speech')),
+            committee TEXT NOT NULL,
+            conference TEXT NOT NULL,
+            content TEXT,
+            source_urls TEXT[],
+            background_guide_text TEXT,
+            formatting_guidelines TEXT,
+            additional_questions JSONB,
+            progress INTEGER NOT NULL DEFAULT 0 CHECK (progress >= 0 AND progress <= 100),
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+
+        -- Enable RLS for documents
+        ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+
+        -- Create RLS policies for documents
+        DROP POLICY IF EXISTS "Users can view their own documents" ON public.documents;
+        CREATE POLICY "Users can view their own documents"
+        ON public.documents FOR SELECT
+        USING (auth.uid() = user_id);
+
+        DROP POLICY IF EXISTS "Users can insert their own documents" ON public.documents;
+        CREATE POLICY "Users can insert their own documents"
+        ON public.documents FOR INSERT
+        WITH CHECK (auth.uid() = user_id);
+
+        DROP POLICY IF EXISTS "Users can update their own documents" ON public.documents;
+        CREATE POLICY "Users can update their own documents"
+        ON public.documents FOR UPDATE
+        USING (auth.uid() = user_id);
+
+        DROP POLICY IF EXISTS "Users can delete their own documents" ON public.documents;
+        CREATE POLICY "Users can delete their own documents"
+        ON public.documents FOR DELETE
+        USING (auth.uid() = user_id);
+
+        -- Create user_stats table
+        CREATE TABLE IF NOT EXISTS public.user_stats (
+            id SERIAL PRIMARY KEY,
+            user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+            conferences_count INTEGER DEFAULT 0,
+            documents_count INTEGER DEFAULT 0,
+            awards_count INTEGER DEFAULT 0,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            UNIQUE(user_id)
+        );
+
+        -- Enable RLS for user_stats
+        ALTER TABLE public.user_stats ENABLE ROW LEVEL SECURITY;
+
+        -- Create RLS policies for user_stats
+        DROP POLICY IF EXISTS "Users can view their own stats" ON public.user_stats;
+        CREATE POLICY "Users can view their own stats"
+        ON public.user_stats FOR SELECT
+        USING (auth.uid() = user_id);
+
+        DROP POLICY IF EXISTS "Users can update their own stats" ON public.user_stats;
+        CREATE POLICY "Users can update their own stats"
+        ON public.user_stats FOR UPDATE
+        USING (auth.uid() = user_id);
+
+        -- Create trigger to create profile and stats on user creation
+        CREATE OR REPLACE FUNCTION public.handle_new_user()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            INSERT INTO public.profiles (id, email)
+            VALUES (new.id, new.email);
+
+            INSERT INTO public.user_stats (user_id)
+            VALUES (new.id);
+
+            RETURN new;
+        END;
+        $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+        -- Drop the trigger if it exists
+        DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+
+        -- Create the trigger
+        CREATE TRIGGER on_auth_user_created
+            AFTER INSERT ON auth.users
+            FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
         """
 
         # Execute all SQL commands in a single transaction
@@ -100,9 +216,9 @@ def setup_database():
                     cur.execute(create_function_sql)
                     print("Created exec_sql function")
                     
-                    # Now try to create the table again
+                    # Now try to create the tables again
                     cur.execute(create_table_sql)
-                    print("Created table and policies using direct connection")
+                    print("Created tables and policies using direct connection")
                 finally:
                     cur.close()
                     conn.close()
