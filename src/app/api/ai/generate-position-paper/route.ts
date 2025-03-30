@@ -33,31 +33,52 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 })
     }
     
-    // Skip the admin validation which might be causing issues
-    // Instead verify user exists by checking the profiles table
+    // Log auth header for debugging
+    const authHeader = request.headers.get('authorization')
+    console.log("Auth header present:", !!authHeader)
+    
+    // Verify user exists by checking the profiles table
     try {
+      console.log("Checking for user profile with ID:", userId)
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('id')
         .eq('id', userId)
         .single()
         
-      if (profileError || !profileData) {
-        console.error("User profile not found:", profileError || "No profile")
-        return NextResponse.json({ error: 'User not found' }, { status: 401 })
+      if (profileError) {
+        console.error("Profile query error:", profileError)
+        
+        // If profile doesn't exist, create it
+        console.log("Attempting to create profile for user:", userId)
+        const { error: createError } = await supabase
+          .from('profiles')
+          .insert({
+            id: userId,
+            username: `user_${Date.now()}`,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+        
+        if (createError) {
+          console.error("Error creating profile:", createError)
+          return NextResponse.json({ error: 'Failed to create user profile' }, { status: 500 })
+        }
+        
+        console.log("Profile created successfully for user:", userId)
+      } else {
+        console.log("User profile verified:", profileData.id)
       }
-      
-      console.log("User profile verified:", profileData.id)
     } catch (authError) {
-      console.error("Error checking user profile:", authError)
-      // Continue anyway in case it's just a permission issue
+      console.error("Error checking/creating user profile:", authError)
+      return NextResponse.json({ error: 'Authentication error' }, { status: 401 })
     }
     
     // Parse request body
     let body;
     try {
       body = await request.json()
-      console.log("Request body:", body)
+      console.log("Request body received and parsed")
     } catch (error) {
       console.error("Error parsing request body:", error)
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
@@ -66,10 +87,15 @@ export async function POST(request: Request) {
     // Extract data for prompt with validation
     const conference = body.conference || ''
     const committee = body.committee || ''
+    const committee_type = body.committee_type || 'General Assembly'
     const topic = body.topic || ''
     const country = body.country || ''
     const template = body.template || 'Standard Position Paper'
     const backgroundText = body.background_text || ''
+    const backgroundGuideUrls = body.background_guide_urls || []
+    const relevantSourceUrls = body.relevant_source_urls || []
+    const positionPaperGuidelines = body.position_paper_guidelines || ''
+    const formattingTipsPage = body.formatting_tips_page || ''
     const customRequirements = body.custom_requirements || ''
     
     // Validate required fields
@@ -83,7 +109,7 @@ export async function POST(request: Request) {
     
     // Construct the prompt
     const prompt = `
-      You are an expert in Model United Nations and international relations. Write a comprehensive position paper for ${country} in the ${committee} committee at ${conference} on the topic of ${topic}.
+      You are an expert in Model United Nations and international relations. Write a comprehensive position paper for ${country} in the ${committee} committee (type: ${committee_type}) at ${conference} on the topic of ${topic}.
 
       Format this position paper following the ${template} format, with clear sections including:
       1. Introduction with country background
@@ -96,6 +122,18 @@ export async function POST(request: Request) {
       
       Additional background information:
       ${backgroundText}
+
+      Background guides:
+      ${backgroundGuideUrls.join('\n')}
+      
+      Relevant sources:
+      ${relevantSourceUrls.join('\n')}
+      
+      Position paper guidelines:
+      ${positionPaperGuidelines}
+      
+      Formatting tips (page reference):
+      ${formattingTipsPage}
       
       Custom formatting requirements:
       ${customRequirements}

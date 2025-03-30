@@ -1,298 +1,287 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Calendar, Clock } from "lucide-react"
+import { ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/lib/auth-context"
+import { motion } from "framer-motion"
+import { createClient } from '@supabase/supabase-js'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+
+// Initialize Supabase client with URL and anon key
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export interface ConferenceFormProps {
-  onSuccess?: () => void
+  onSuccess?: (conferenceId?: number, conferenceName?: string) => void
   onCancel?: () => void
 }
 
 export function ConferenceForm({ onSuccess, onCancel }: ConferenceFormProps) {
-  const { user, isLoading } = useAuth()
+  const { user } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
-  
+  const [step, setStep] = useState(1)
   const [formData, setFormData] = useState({
     name: "",
-    acronym: "",
-    dates: "",
     committee: "",
-    committee_type: "GA", // GA, SC, crisis, specialized, other
-    country: "",
-    role: "",
-    topic: "",
-    location: "",
-    status: "upcoming", // active, upcoming, completed
-    progress: 0
+    role: "Delegate",
+    dates: "",
+    coDelegate: "",
+    status: "upcoming"
   })
 
-  // Debug user state
-  useEffect(() => {
-    console.log("Auth state in ConferenceForm:", { user, isLoading })
-  }, [user, isLoading])
+  // Auto-generate acronym
+  const generateAcronym = (name: string) => {
+    if (!name) return "";
+    return name
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase();
+  };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }))
-  }
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData({
+      ...formData,
+      [name]: value
+    });
+  };
 
-  const handleRadioChange = (name: string, value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }))
-  }
+  const handleSelectChange = (field: string, value: string) => {
+    setFormData({
+      ...formData,
+      [field]: value
+    });
+  };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    if (!user || !user.id) {
-      console.error("User not authenticated or missing ID:", user)
-      toast({
-        title: "Authentication required",
-        description: "Please sign in to add a conference",
-        variant: "destructive",
-      })
-      return
-    }
+  const handleContinue = (e: React.FormEvent) => {
+    e.preventDefault();
     
     if (!formData.name.trim()) {
       toast({
         title: "Conference name required",
         description: "Please enter a conference name",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
     
-    setIsSubmitting(true)
-    console.log("Submitting with user ID:", user.id)
+    setStep(2);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!user?.id) {
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to add a conference",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setIsSubmitting(true);
     
     try {
-      const response = await fetch("/api/conferences", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "user-id": user.id,
-        },
-        body: JSON.stringify({
-          ...formData,
-          user_id: user.id, // Also include in the body as a fallback
-        }),
-      })
+      // Create a Supabase client
+      const supabase = createClient(supabaseUrl, supabaseKey);
       
-      if (!response.ok) {
-        const error = await response.json()
-        console.error("Conference creation error:", error)
-        throw new Error(error.error || "Failed to create conference")
+      // Generate acronym from name
+      const acronym = generateAcronym(formData.name);
+      
+      // Create conference directly with Supabase
+      const { data, error } = await supabase
+        .from('conferences')
+        .insert({
+          user_id: user.id,
+          name: formData.name,
+          acronym: acronym,
+          committee: formData.committee || "TBD",
+          role: formData.role || "Delegate",
+          dates: formData.dates || "",
+          co_delegate: formData.coDelegate || "",
+          status: formData.status || "upcoming",
+          progress: 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+      
+      if (error) {
+        throw new Error(error.message || "Failed to create conference");
       }
       
       toast({
         title: "Conference added",
         description: "Your conference has been added successfully",
-      })
+      });
       
-      router.refresh()
-      
-      if (onSuccess) {
-        onSuccess()
-      }
+      if (onSuccess) onSuccess(data.id, data.name);
     } catch (error: any) {
-      console.error("Conference creation exception:", error)
+      console.error("Conference creation error:", error);
       toast({
         title: "Error adding conference",
         description: error.message || "An unexpected error occurred",
         variant: "destructive",
-      })
+      });
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
-  
+  };
+
   return (
-    <Card className="w-full max-w-2xl mx-auto">
-      <CardHeader>
-        <CardTitle>Add New Conference</CardTitle>
-        <CardDescription>
-          Enter the details of your MUN conference
-        </CardDescription>
-      </CardHeader>
-      <form onSubmit={handleSubmit}>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Conference Name *</Label>
-            <Input
-              id="name"
-              name="name"
-              placeholder="Harvard National Model United Nations"
-              value={formData.name}
-              onChange={handleChange}
-              required
-            />
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="acronym">Conference Acronym</Label>
-            <Input
-              id="acronym"
-              name="acronym"
-              placeholder="HNMUN"
-              value={formData.acronym}
-              onChange={handleChange}
-            />
-            <p className="text-xs text-muted-foreground">
-              Common abbreviation for the conference, if any
-            </p>
-          </div>
-          
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="dates">Conference Dates</Label>
-              <div className="relative">
-                <Input
-                  id="dates"
-                  name="dates"
-                  placeholder="Feb 10-13, 2025"
-                  value={formData.dates}
-                  onChange={handleChange}
-                />
-                <Calendar className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+    >
+      <Card className="w-full max-w-md mx-auto">
+        <CardHeader>
+          <CardTitle>{step === 1 ? "New Conference" : "Conference Details"}</CardTitle>
+          <CardDescription>
+            {step === 1 
+              ? "Enter your conference name to get started" 
+              : "Add additional details about your conference"}
+          </CardDescription>
+        </CardHeader>
+        
+        {step === 1 ? (
+          <form onSubmit={handleContinue}>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Conference Name *</Label>
+                  <Input
+                    id="name"
+                    name="name"
+                    placeholder="e.g., Harvard National Model United Nations"
+                    value={formData.name}
+                    onChange={handleInputChange}
+                    className="text-lg"
+                    autoFocus
+                  />
+                </div>
               </div>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="location">Location</Label>
-              <Input
-                id="location"
-                name="location"
-                placeholder="Boston, MA"
-                value={formData.location}
-                onChange={handleChange}
-              />
-            </div>
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="committee">Committee</Label>
-            <Input
-              id="committee"
-              name="committee"
-              placeholder="UN Security Council"
-              value={formData.committee}
-              onChange={handleChange}
-            />
-          </div>
-          
-          <div className="space-y-2">
-            <Label>Committee Type</Label>
-            <RadioGroup
-              value={formData.committee_type}
-              onValueChange={(value: string) => handleRadioChange("committee_type", value)}
-              className="flex flex-wrap gap-4"
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="GA" id="GA" />
-                <Label htmlFor="GA" className="font-normal">General Assembly</Label>
+            </CardContent>
+            <CardFooter className="flex justify-between">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onCancel}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={isSubmitting || !formData.name.trim()}
+              >
+                Continue <ChevronRight className="ml-2 h-4 w-4" />
+              </Button>
+            </CardFooter>
+          </form>
+        ) : (
+          <form onSubmit={handleSubmit}>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="committee">Committee (Optional)</Label>
+                  <Input
+                    id="committee"
+                    name="committee"
+                    placeholder="e.g., UN Security Council"
+                    value={formData.committee}
+                    onChange={handleInputChange}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="role">Your Role</Label>
+                  <Select
+                    value={formData.role}
+                    onValueChange={(value) => handleSelectChange("role", value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select your role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Delegate">Delegate</SelectItem>
+                      <SelectItem value="Head Delegate">Head Delegate</SelectItem>
+                      <SelectItem value="Chair">Chair</SelectItem>
+                      <SelectItem value="Vice Chair">Vice Chair</SelectItem>
+                      <SelectItem value="Director">Director</SelectItem>
+                      <SelectItem value="Secretariat">Secretariat</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="dates">Conference Dates (Optional)</Label>
+                  <Input
+                    id="dates"
+                    name="dates"
+                    placeholder="e.g., Feb 10-13, 2024"
+                    value={formData.dates}
+                    onChange={handleInputChange}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="coDelegate">Co-Delegate Name (Optional)</Label>
+                  <Input
+                    id="coDelegate"
+                    name="coDelegate"
+                    placeholder="e.g., John Smith"
+                    value={formData.coDelegate}
+                    onChange={handleInputChange}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="status">Status</Label>
+                  <Select
+                    value={formData.status}
+                    onValueChange={(value) => handleSelectChange("status", value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="upcoming">Upcoming</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="SC" id="SC" />
-                <Label htmlFor="SC" className="font-normal">Security Council</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="crisis" id="crisis" />
-                <Label htmlFor="crisis" className="font-normal">Crisis</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="specialized" id="specialized" />
-                <Label htmlFor="specialized" className="font-normal">Specialized</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="other" id="other" />
-                <Label htmlFor="other" className="font-normal">Other</Label>
-              </div>
-            </RadioGroup>
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="topic">Committee Topic</Label>
-            <Input
-              id="topic"
-              name="topic"
-              placeholder="Global Climate Crisis"
-              value={formData.topic}
-              onChange={handleChange}
-            />
-          </div>
-          
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="country">Country/Character</Label>
-              <Input
-                id="country"
-                name="country"
-                placeholder="France"
-                value={formData.country}
-                onChange={handleChange}
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="role">Your Role</Label>
-              <Input
-                id="role"
-                name="role"
-                placeholder="Delegate"
-                value={formData.role}
-                onChange={handleChange}
-              />
-            </div>
-          </div>
-          
-          <div className="space-y-2">
-            <Label>Conference Status</Label>
-            <RadioGroup
-              value={formData.status}
-              onValueChange={(value: string) => handleRadioChange("status", value)}
-              className="flex space-x-4"
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="active" id="active" />
-                <Label htmlFor="active" className="font-normal">Current</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="upcoming" id="upcoming" />
-                <Label htmlFor="upcoming" className="font-normal">Upcoming</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="completed" id="completed" />
-                <Label htmlFor="completed" className="font-normal">Past</Label>
-              </div>
-            </RadioGroup>
-          </div>
-        </CardContent>
-        <CardFooter className="flex justify-between">
-          <Button variant="outline" type="button" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={isSubmitting || isLoading}>
-            {isSubmitting ? "Adding..." : "Add Conference"}
-          </Button>
-        </CardFooter>
-      </form>
-    </Card>
+            </CardContent>
+            <CardFooter className="flex justify-between">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setStep(1)}
+              >
+                Back
+              </Button>
+              <Button
+                type="submit"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? "Creating..." : "Add Conference"}
+              </Button>
+            </CardFooter>
+          </form>
+        )}
+      </Card>
+    </motion.div>
   )
 } 

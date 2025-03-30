@@ -17,6 +17,10 @@ import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
 import { RichTextEditor } from "@/components/rich-text-editor"
 import { Toaster } from "@/components/ui/toaster"
+import { createClient } from '@supabase/supabase-js'
+import { ConferenceForm } from "@/components/conference-form"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
+import { supabase } from "@/lib/supabase-client"
 
 // Mock data
 const conferences = [
@@ -58,13 +62,21 @@ export default function NewPositionPaper() {
   const [generatedContent, setGeneratedContent] = useState("")
   const [userConferences, setUserConferences] = useState<any[]>([])
   const [isEditorReady, setIsEditorReady] = useState(false)
+  const [dataFetched, setDataFetched] = useState(false)
+  const [isAddConferenceOpen, setIsAddConferenceOpen] = useState(false)
+  const [pdfFile, setPdfFile] = useState<File | null>(null)
   
   const [formData, setFormData] = useState({
     conference: "",
     committee: "",
+    committee_type: "GA", // GA, SC, crisis, specialized, other
     topic: "",
     country: "",
     backgroundText: "",
+    backgroundGuideUrls: [""],
+    relevantSourceUrls: [""],
+    positionPaperGuidelines: "",
+    formattingTipsPage: "",
     template: "Standard Position Paper",
     customRequirements: "",
   })
@@ -86,26 +98,49 @@ export default function NewPositionPaper() {
       return
     }
     
+    // Skip if we've already fetched the data
+    if (dataFetched) return
+    
     const fetchConferences = async () => {
       try {
         console.log("Fetching conferences with user ID:", user?.id)
-        const response = await fetch(`/api/conferences?userId=${user?.id}`)
-        if (response.ok) {
-          const data = await response.json()
-          setUserConferences(data || [])
-        } else {
-          const errorData = await response.json()
-          console.error("Error fetching conferences:", errorData)
+        
+        // Get user session to ensure authentication
+        const { data: sessionData } = await supabase.auth.getSession()
+        
+        if (!sessionData.session) {
+          console.error("No active session found");
+          return;
         }
+        
+        // Fetch ALL conferences from Supabase directly (removed status filter)
+        const { data, error } = await supabase
+          .from('conferences')
+          .select('*')
+          .eq('user_id', user?.id)
+          .order('created_at', { ascending: false })
+        
+        if (error) {
+          throw error;
+        }
+        
+        console.log("Fetched conferences:", data);
+        setUserConferences(data || [])
+        setDataFetched(true)
       } catch (err) {
-        console.error("Exception fetching conferences:", err)
+        console.error("Error fetching conferences:", err)
+        toast({
+          title: "Error loading conferences",
+          description: "Unable to load your conferences. Please try again later.",
+          variant: "destructive",
+        })
       }
     }
     
     if (user) {
       fetchConferences()
     }
-  }, [user, router, authLoading])
+  }, [user, router, authLoading, dataFetched, toast])
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -141,6 +176,8 @@ export default function NewPositionPaper() {
     if (!e.target.files || e.target.files.length === 0) return
     
     const file = e.target.files[0]
+    setPdfFile(file)
+    
     const reader = new FileReader()
     
     reader.onload = (e) => {
@@ -152,7 +189,64 @@ export default function NewPositionPaper() {
       }
     }
     
-    reader.readAsText(file)
+    if (file.type === 'application/pdf') {
+      toast({
+        title: "PDF Added",
+        description: `File "${file.name}" will be processed with your submission.`,
+      })
+    } else {
+      reader.readAsText(file)
+    }
+  }
+
+  const addBackgroundGuideUrl = () => {
+    setFormData({
+      ...formData,
+      backgroundGuideUrls: [...formData.backgroundGuideUrls, ""]
+    });
+  }
+
+  const updateBackgroundGuideUrl = (index: number, value: string) => {
+    const updatedUrls = [...formData.backgroundGuideUrls];
+    updatedUrls[index] = value;
+    setFormData({
+      ...formData,
+      backgroundGuideUrls: updatedUrls
+    });
+  }
+
+  const removeBackgroundGuideUrl = (index: number) => {
+    if (formData.backgroundGuideUrls.length <= 1) return;
+    const updatedUrls = formData.backgroundGuideUrls.filter((_, i) => i !== index);
+    setFormData({
+      ...formData,
+      backgroundGuideUrls: updatedUrls
+    });
+  }
+
+  const addRelevantSourceUrl = () => {
+    setFormData({
+      ...formData,
+      relevantSourceUrls: [...formData.relevantSourceUrls, ""]
+    });
+  }
+
+  const updateRelevantSourceUrl = (index: number, value: string) => {
+    const updatedUrls = [...formData.relevantSourceUrls];
+    updatedUrls[index] = value;
+    setFormData({
+      ...formData,
+      relevantSourceUrls: updatedUrls
+    });
+  }
+
+  const removeRelevantSourceUrl = (index: number) => {
+    if (formData.relevantSourceUrls.length <= 1) return;
+    const updatedUrls = formData.relevantSourceUrls.filter((_, i) => i !== index);
+    setFormData({
+      ...formData,
+      relevantSourceUrls: updatedUrls
+    });
   }
 
   const generatePositionPaper = async () => {
@@ -180,39 +274,144 @@ export default function NewPositionPaper() {
     console.log("Generating position paper with user ID:", user.id)
     
     try {
+      // Create Supabase client and ensure profile exists - use shared client
+      // Check if user profile exists
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', user.id)
+        .single()
+      
+      // If profile doesn't exist, create it
+      if (profileError) {
+        console.log("Profile not found, creating profile for user:", user.id)
+        const { error: createError } = await supabase
+          .from('profiles')
+          .insert({
+            id: user.id,
+            email: user.email,
+            full_name: user.user_metadata?.full_name || '',
+            username: user.email?.split('@')[0] || `user_${Date.now()}`,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+        
+        if (createError) {
+          console.error("Error creating profile:", createError)
+          throw new Error("Failed to create user profile. Please try again or contact support.")
+        }
+      }
+      
+      // Create form data for file upload if needed
+      const formDataObj = new FormData()
+      if (pdfFile && pdfFile.type === 'application/pdf') {
+        formDataObj.append('pdf', pdfFile)
+      }
+      
+      // Prepare request data
       const requestData = {
         conference: formData.conference,
         committee: formData.committee,
+        committee_type: formData.committee_type,
         topic: formData.topic,
         country: formData.country,
         background_text: formData.backgroundText,
+        background_guide_urls: formData.backgroundGuideUrls.filter(url => url.trim()),
+        relevant_source_urls: formData.relevantSourceUrls.filter(url => url.trim()),
+        position_paper_guidelines: formData.positionPaperGuidelines,
+        formatting_tips_page: formData.formattingTipsPage,
         template: formData.template,
         custom_requirements: formData.customRequirements,
-        user_id: user.id, // Include in body as fallback
+        user_id: user.id,
       }
       
       console.log("Request data:", requestData)
       
-      const response = await fetch("/api/ai/generate-position-paper", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "user-id": user.id,
-        },
-        body: JSON.stringify(requestData),
-      })
+      // Get current session
+      const { data: sessionData } = await supabase.auth.getSession()
+      
+      if (!sessionData.session) {
+        console.error("No active session found")
+        throw new Error("Authentication session expired. Please log in again.")
+      }
+      
+      const accessToken = sessionData.session.access_token
+      console.log("Got access token:", accessToken ? "Yes (length: " + accessToken.length + ")" : "No")
+      
+      // If we have a PDF file, handle it separately with FormData
+      let response;
+      if (pdfFile && pdfFile.type === 'application/pdf') {
+        // Add all text fields to FormData
+        Object.entries(requestData).forEach(([key, value]) => {
+          if (Array.isArray(value)) {
+            value.forEach(item => formDataObj.append(`${key}[]`, item))
+          } else {
+            formDataObj.append(key, String(value))
+          }
+        })
+        
+        response = await fetch("/api/ai/generate-position-paper", {
+          method: "POST",
+          headers: {
+            "user-id": user.id,
+            "Authorization": `Bearer ${accessToken}`,
+          },
+          body: formDataObj,
+        })
+      } else {
+        // Standard JSON request without file
+        response = await fetch("/api/ai/generate-position-paper", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "user-id": user.id,
+            "Authorization": `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify(requestData),
+        })
+      }
       
       console.log("Response status:", response.status)
       
       if (!response.ok) {
-        const errorData = await response.json()
-        console.error("Position paper generation error:", errorData)
-        throw new Error(errorData.error || "Failed to generate position paper")
+        let errorMessage = "Failed to generate position paper";
+        
+        if (response.status === 401) {
+          errorMessage = "Authentication error. Please log out and log back in.";
+          toast({
+            title: "Session expired",
+            description: "Your session has expired. Please log out and log back in.",
+            variant: "destructive",
+          });
+          
+          // Don't auto-redirect as it might be confusing to users
+          setIsLoading(false);
+          return;
+        }
+        
+        try {
+          const errorData = await response.json();
+          console.error("Position paper generation error:", errorData);
+          errorMessage = errorData.error || errorMessage;
+        } catch (parseError) {
+          const text = await response.text();
+          console.error("Error parsing error response:", text);
+        }
+        
+        throw new Error(errorMessage);
       }
       
-      const data = await response.json()
-      console.log("Position paper generated successfully")
-      setGeneratedContent(data.content)
+      let data;
+      try {
+        const text = await response.text();
+        data = JSON.parse(text);
+      } catch (e) {
+        console.error("Error parsing success response:", e);
+        throw new Error("Invalid response format from server");
+      }
+      
+      console.log("Position paper generated successfully");
+      setGeneratedContent(data.content);
       
       toast({
         title: "Position paper generated",
@@ -290,6 +489,27 @@ export default function NewPositionPaper() {
     }
   }
 
+  // Handler for conference form success
+  const handleConferenceAdded = (conferenceId?: number, conferenceName?: string) => {
+    setIsAddConferenceOpen(false)
+    
+    // Set the newly created conference in the form
+    if (conferenceName) {
+      setFormData({
+        ...formData,
+        conference: conferenceName
+      })
+    }
+    
+    // Refetch conferences to include the new one
+    setDataFetched(false)
+    
+    toast({
+      title: "Conference added",
+      description: "Your new conference has been added and selected",
+    })
+  }
+
   // Show loading state while authentication is being checked
   if (authLoading) {
     return (
@@ -308,361 +528,529 @@ export default function NewPositionPaper() {
     return null // Will redirect in useEffect
   }
 
-  return (
-    <DashboardLayout>
-      <div className="container mx-auto max-w-4xl py-6">
-        <div className="mb-6">
-          <Button variant="ghost" size="sm" onClick={() => window.history.back()}>
-            <ChevronLeft className="mr-2 h-4 w-4" />
-            Back to Dashboard
-          </Button>
-          <h1 className="text-3xl font-bold mt-4">Create Position Paper</h1>
-          <p className="text-muted-foreground mt-1">Generate a position paper for your MUN conference</p>
-        </div>
+  // Render the appropriate step content
+  const renderStepContent = () => {
+    const fadeIn = {
+      hidden: { opacity: 0, y: 20 },
+      visible: { opacity: 1, y: 0, transition: { duration: 0.5 } }
+    };
 
-        {step < 5 && (
-          <div className="relative mb-8">
-            <div className="absolute left-0 top-1/2 h-0.5 w-full -translate-y-1/2 bg-muted"></div>
-            <ol className="relative z-10 flex justify-between">
-              {[1, 2, 3, 4].map((i) => (
-                <li key={i} className="flex items-center justify-center">
-                  <div
-                    className={`flex h-10 w-10 items-center justify-center rounded-full border-2 ${
-                      step >= i ? "border-primary bg-primary text-primary-foreground" : "border-muted bg-background"
-                    }`}
-                  >
-                    {i}
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </div>
-        )}
-
-        {step === 1 && (
+    switch (step) {
+      case 1:
+        return (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3 }}
+            key="step1"
+            initial="hidden"
+            animate="visible"
+            variants={fadeIn}
+            className="space-y-6"
           >
-            <Card>
-              <CardHeader>
-                <CardTitle>Conference Details</CardTitle>
-                <CardDescription>Enter the conference, committee, topic, and your country/character</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
+            <div className="space-y-1">
+              <h2 className="text-2xl font-bold">Conference & Committee Details</h2>
+              <p className="text-muted-foreground">
+                Let's start with basic information about your MUN conference
+              </p>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
                   <Label htmlFor="conference">Conference *</Label>
-                  {userConferences.length > 0 ? (
-                    <Select value={formData.conference} onValueChange={(value) => handleChange("conference", value)}>
-                      <SelectTrigger id="conference">
-                        <SelectValue placeholder="Select conference" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {userConferences.map((conference) => (
-                          <SelectItem key={conference.id} value={conference.name}>
-                            {conference.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Input
-                      id="conference"
-                      name="conference"
-                      placeholder="Harvard National Model United Nations"
-                      value={formData.conference}
-                      onChange={handleInputChange}
-                      required
-                    />
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setIsAddConferenceOpen(true)}
+                  >
+                    + Add New
+                  </Button>
+                </div>
+                <Select
+                  value={formData.conference}
+                  onValueChange={(value) => handleChange("conference", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a conference" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {userConferences.length > 0 ? (
+                      userConferences.map((conf) => (
+                        <SelectItem key={conf.id} value={conf.name}>
+                          {conf.name}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="add-new" disabled>
+                        No conferences found (click "Add New" above)
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="committee">Committee Name *</Label>
+                <Input
+                  id="committee"
+                  name="committee"
+                  placeholder="UN Security Council"
+                  value={formData.committee}
+                  onChange={handleInputChange}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Committee Type</Label>
+                <Select
+                  value={formData.committee_type}
+                  onValueChange={(value) => handleChange("committee_type", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select committee type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="GA">General Assembly</SelectItem>
+                    <SelectItem value="SC">Security Council</SelectItem>
+                    <SelectItem value="crisis">Crisis Committee</SelectItem>
+                    <SelectItem value="specialized">Specialized Agency</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="topic">Committee Topic *</Label>
+                <Input
+                  id="topic"
+                  name="topic"
+                  placeholder="Climate Change and Environmental Security"
+                  value={formData.topic}
+                  onChange={handleInputChange}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="country">Country/Character *</Label>
+                <Input
+                  id="country"
+                  name="country"
+                  placeholder="France"
+                  value={formData.country}
+                  onChange={handleInputChange}
+                />
+              </div>
+            </div>
+          </motion.div>
+        );
+      
+      case 2:
+        return (
+          <motion.div
+            key="step2"
+            initial="hidden"
+            animate="visible"
+            variants={fadeIn}
+            className="space-y-6"
+          >
+            <div className="space-y-1">
+              <h2 className="text-2xl font-bold">Background Information</h2>
+              <p className="text-muted-foreground">
+                Add background guides and relevant research sources
+              </p>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="backgroundText">Background Text</Label>
+                <Textarea
+                  id="backgroundText"
+                  name="backgroundText"
+                  placeholder="Paste background information or research notes here..."
+                  value={formData.backgroundText}
+                  onChange={handleInputChange}
+                  rows={6}
+                  className="min-h-[150px]"
+                />
+                <div className="text-xs text-muted-foreground">
+                  Paste text from research or background guides to help generate a more informed position paper
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="fileUpload">Upload Background File (PDF or TXT)</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="fileUpload"
+                    type="file"
+                    accept=".txt,.pdf"
+                    onChange={handleFileUpload}
+                    className="flex-1"
+                  />
+                  {pdfFile && (
+                    <div className="text-sm text-muted-foreground flex items-center gap-1">
+                      <FileText className="h-4 w-4" />
+                      {pdfFile.name}
+                    </div>
                   )}
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="committee">Committee *</Label>
-                  <Input
-                    id="committee"
-                    name="committee"
-                    placeholder="UN Security Council"
-                    value={formData.committee}
-                    onChange={handleInputChange}
-                    required
-                  />
+                <div className="text-xs text-muted-foreground">
+                  Upload a PDF or text file containing background information
                 </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Background Guide URLs</Label>
                 <div className="space-y-2">
-                  <Label htmlFor="topic">Topic *</Label>
-                  <Input
-                    id="topic"
-                    name="topic"
-                    placeholder="Climate Change and Environmental Security"
-                    value={formData.topic}
-                    onChange={handleInputChange}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="country">Country/Character *</Label>
-                  <Input
-                    id="country"
-                    name="country"
-                    placeholder="France"
-                    value={formData.country}
-                    onChange={handleInputChange}
-                    required
-                  />
-                </div>
-              </CardContent>
-              <CardFooter className="flex justify-end">
-                <Button onClick={handleNext}>
-                  Next
-                  <ChevronRight className="ml-2 h-4 w-4" />
-                </Button>
-              </CardFooter>
-            </Card>
-          </motion.div>
-        )}
-
-        {step === 2 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3 }}
-          >
-            <Card>
-              <CardHeader>
-                <CardTitle>Background Information</CardTitle>
-                <CardDescription>
-                  Upload a background guide or paste text to help generate your position paper
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Tabs defaultValue="paste">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="upload">Upload Document</TabsTrigger>
-                    <TabsTrigger value="paste">Paste Text</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="upload" className="space-y-4 pt-4">
-                    <div className="flex items-center justify-center w-full">
-                      <label
-                        htmlFor="dropzone-file"
-                        className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed rounded-lg cursor-pointer bg-muted/30 hover:bg-muted/50"
-                      >
-                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                          <Upload className="w-10 h-10 mb-3 text-muted-foreground" />
-                          <p className="mb-2 text-sm text-muted-foreground">
-                            <span className="font-semibold">Click to upload</span> or drag and drop
-                          </p>
-                          <p className="text-xs text-muted-foreground">TXT, PDF or DOCX (MAX. 10MB)</p>
-                        </div>
-                        <input 
-                          id="dropzone-file" 
-                          type="file" 
-                          className="hidden" 
-                          accept=".txt,.pdf,.docx" 
-                          onChange={handleFileUpload}
-                        />
-                      </label>
-                    </div>
-                  </TabsContent>
-                  <TabsContent value="paste" className="space-y-4 pt-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="backgroundText">Background Information</Label>
-                      <Textarea
-                        id="backgroundText"
-                        name="backgroundText"
-                        placeholder="Paste background information or research notes here..."
-                        className="min-h-[200px]"
-                        value={formData.backgroundText}
-                        onChange={handleInputChange}
+                  {formData.backgroundGuideUrls.map((url, index) => (
+                    <div key={`bg-${index}`} className="flex items-center gap-2">
+                      <Input
+                        placeholder="https://example.com/background-guide.pdf"
+                        value={url}
+                        onChange={(e) => updateBackgroundGuideUrl(index, e.target.value)}
                       />
-                    </div>
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-              <CardFooter className="flex justify-between">
-                <Button variant="outline" onClick={handleBack}>
-                  <ChevronLeft className="mr-2 h-4 w-4" />
-                  Back
-                </Button>
-                <Button onClick={handleNext}>
-                  Next
-                  <ChevronRight className="ml-2 h-4 w-4" />
-                </Button>
-              </CardFooter>
-            </Card>
-          </motion.div>
-        )}
-
-        {step === 3 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3 }}
-          >
-            <Card>
-              <CardHeader>
-                <CardTitle>Formatting Requirements</CardTitle>
-                <CardDescription>Select a template or specify custom formatting requirements</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-4">
-                  <Label>Select Template</Label>
-                  <div className="grid gap-4 md:grid-cols-3">
-                    {[
-                      { id: 1, name: "Standard Position Paper", description: "Traditional format with introduction, body, and conclusion" },
-                      { id: 2, name: "Harvard Style", description: "Specific format required for Harvard MUN conferences" },
-                      { id: 3, name: "Detailed Analysis", description: "In-depth analysis with policy recommendations" },
-                    ].map((template) => (
-                      <div
-                        key={template.id}
-                        className={`cursor-pointer rounded-lg border p-4 transition-all hover:border-primary ${
-                          formData.template === template.name ? "border-2 border-primary bg-primary/5" : ""
-                        }`}
-                        onClick={() => handleChange("template", template.name)}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => removeBackgroundGuideUrl(index)}
+                        disabled={formData.backgroundGuideUrls.length <= 1}
                       >
-                        <div className="flex items-center gap-2 mb-2">
-                          <FileText className="h-5 w-5 text-primary" />
-                          <h3 className="font-medium">{template.name}</h3>
-                        </div>
-                        <p className="text-sm text-muted-foreground">{template.description}</p>
-                      </div>
-                    ))}
-                  </div>
+                        <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                          -
+                        </motion.div>
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={addBackgroundGuideUrl}
+                    className="w-full"
+                  >
+                    <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                      Add Another Background Guide URL
+                    </motion.div>
+                  </Button>
                 </div>
-                <Separator className="my-4" />
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Relevant Source URLs</Label>
                 <div className="space-y-2">
-                  <Label htmlFor="customRequirements">Custom Requirements (Optional)</Label>
-                  <Textarea
-                    id="customRequirements"
-                    name="customRequirements"
-                    placeholder="Enter any specific formatting requirements for your position paper..."
-                    className="min-h-[100px]"
-                    value={formData.customRequirements}
-                    onChange={handleInputChange}
-                  />
+                  {formData.relevantSourceUrls.map((url, index) => (
+                    <div key={`src-${index}`} className="flex items-center gap-2">
+                      <Input
+                        placeholder="https://example.com/relevant-source.html"
+                        value={url}
+                        onChange={(e) => updateRelevantSourceUrl(index, e.target.value)}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => removeRelevantSourceUrl(index)}
+                        disabled={formData.relevantSourceUrls.length <= 1}
+                      >
+                        <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                          -
+                        </motion.div>
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={addRelevantSourceUrl}
+                    className="w-full"
+                  >
+                    <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                      Add Another Source URL
+                    </motion.div>
+                  </Button>
                 </div>
-              </CardContent>
-              <CardFooter className="flex justify-between">
-                <Button variant="outline" onClick={handleBack}>
-                  <ChevronLeft className="mr-2 h-4 w-4" />
-                  Back
-                </Button>
-                <Button onClick={handleNext}>
-                  Next
-                  <ChevronRight className="ml-2 h-4 w-4" />
-                </Button>
-              </CardFooter>
-            </Card>
+              </div>
+            </div>
           </motion.div>
-        )}
-
-        {step === 4 && (
+        );
+      
+      case 3:
+        return (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3 }}
+            key="step3"
+            initial="hidden"
+            animate="visible"
+            variants={fadeIn}
+            className="space-y-6"
           >
-            <Card>
-              <CardHeader>
-                <CardTitle>Review and Generate</CardTitle>
-                <CardDescription>Review your selections and generate your position paper</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="rounded-lg bg-muted p-4">
-                  <h3 className="font-medium mb-2">Summary</h3>
-                  <div className="grid gap-2 text-sm">
-                    <div className="grid grid-cols-3">
-                      <span className="text-muted-foreground">Conference:</span>
-                      <span className="col-span-2 font-medium">{formData.conference || "Not selected"}</span>
-                    </div>
-                    <div className="grid grid-cols-3">
-                      <span className="text-muted-foreground">Committee:</span>
-                      <span className="col-span-2 font-medium">{formData.committee || "Not selected"}</span>
-                    </div>
-                    <div className="grid grid-cols-3">
-                      <span className="text-muted-foreground">Topic:</span>
-                      <span className="col-span-2 font-medium">{formData.topic || "Not selected"}</span>
-                    </div>
-                    <div className="grid grid-cols-3">
-                      <span className="text-muted-foreground">Country/Character:</span>
-                      <span className="col-span-2 font-medium">{formData.country || "Not selected"}</span>
-                    </div>
-                    <div className="grid grid-cols-3">
-                      <span className="text-muted-foreground">Template:</span>
-                      <span className="col-span-2 font-medium">{formData.template || "Not selected"}</span>
-                    </div>
-                    <div className="grid grid-cols-3">
-                      <span className="text-muted-foreground">Background Info:</span>
-                      <span className="col-span-2 font-medium">{formData.backgroundText ? "Provided" : "Not provided"}</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="rounded-lg border p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Sparkles className="h-5 w-5 text-primary" />
-                    <h3 className="font-medium">AI-Powered Generation</h3>
-                  </div>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Our AI will analyze your inputs and generate a position paper tailored to your specifications.
-                    You'll be able to edit and refine the document after generation.
-                  </p>
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="text-muted-foreground">Estimated time:</span>
-                    <span className="font-medium">1-2 minutes</span>
-                  </div>
-                </div>
-              </CardContent>
-              <CardFooter className="flex justify-between">
-                <Button variant="outline" onClick={handleBack}>
-                  <ChevronLeft className="mr-2 h-4 w-4" />
-                  Back
-                </Button>
-                <Button onClick={generatePositionPaper} disabled={isLoading}>
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  {isLoading ? "Generating..." : "Generate Position Paper"}
-                </Button>
-              </CardFooter>
-            </Card>
-          </motion.div>
-        )}
-
-        {step === 5 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <Card>
-              <CardHeader>
-                <CardTitle>Edit Position Paper</CardTitle>
-                <CardDescription>Review and make changes to your generated position paper</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <RichTextEditor
-                  initialValue={generatedContent}
-                  height={600}
-                  onChange={(content) => setGeneratedContent(content)}
+            <div className="space-y-1">
+              <h2 className="text-2xl font-bold">Formatting Guidelines</h2>
+              <p className="text-muted-foreground">
+                Specify position paper guidelines and formatting requirements
+              </p>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="positionPaperGuidelines">Position Paper Guidelines</Label>
+                <Textarea
+                  id="positionPaperGuidelines"
+                  name="positionPaperGuidelines"
+                  placeholder="Enter any specific guidelines provided by the conference..."
+                  value={formData.positionPaperGuidelines}
+                  onChange={handleInputChange}
+                  rows={4}
                 />
-              </CardContent>
-              <CardFooter className="flex justify-between">
-                <Button variant="outline" onClick={() => setStep(4)}>
-                  <ChevronLeft className="mr-2 h-4 w-4" />
-                  Back
-                </Button>
-                <Button onClick={() => saveDocument(generatedContent)} disabled={isLoading}>
-                  <Save className="mr-2 h-4 w-4" />
-                  {isLoading ? "Saving..." : "Save Document"}
-                </Button>
-              </CardFooter>
-            </Card>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="formattingTipsPage">Formatting Tips Page Reference</Label>
+                <Input
+                  id="formattingTipsPage"
+                  name="formattingTipsPage"
+                  placeholder="e.g., 'Page 5 of the background guide'"
+                  value={formData.formattingTipsPage}
+                  onChange={handleInputChange}
+                />
+                <div className="text-xs text-muted-foreground">
+                  Reference to where formatting guidelines can be found in the background guide
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="template">Paper Template</Label>
+                <Select
+                  value={formData.template}
+                  onValueChange={(value) => handleChange("template", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a template" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {templates.map((template) => (
+                      <SelectItem key={template.id} value={template.name}>
+                        {template.name} - {template.description}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="customRequirements">Custom Requirements</Label>
+                <Textarea
+                  id="customRequirements"
+                  name="customRequirements"
+                  placeholder="Any additional formatting or content requirements..."
+                  value={formData.customRequirements}
+                  onChange={handleInputChange}
+                  rows={4}
+                />
+              </div>
+            </div>
           </motion.div>
-        )}
+        );
+      
+      case 4:
+        return (
+          <motion.div
+            key="step4"
+            initial="hidden"
+            animate="visible"
+            variants={fadeIn}
+            className="space-y-6"
+          >
+            <div className="space-y-1">
+              <h2 className="text-2xl font-bold">Review & Generate</h2>
+              <p className="text-muted-foreground">
+                Review your information and generate your position paper
+              </p>
+            </div>
+            
+            <div className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Conference & Committee</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="text-sm font-medium">Conference:</div>
+                    <div className="text-sm">{formData.conference}</div>
+                    <div className="text-sm font-medium">Committee:</div>
+                    <div className="text-sm">{formData.committee}</div>
+                    <div className="text-sm font-medium">Committee Type:</div>
+                    <div className="text-sm">{formData.committee_type}</div>
+                    <div className="text-sm font-medium">Topic:</div>
+                    <div className="text-sm">{formData.topic}</div>
+                    <div className="text-sm font-medium">Country/Character:</div>
+                    <div className="text-sm">{formData.country}</div>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader>
+                  <CardTitle>Research Sources</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="text-sm font-medium">Background Guides:</div>
+                  <div className="text-sm">
+                    {formData.backgroundGuideUrls.filter(url => url.trim()).length > 0 ? (
+                      <ul className="list-disc list-inside">
+                        {formData.backgroundGuideUrls.filter(url => url.trim()).map((url, index) => (
+                          <li key={`bg-review-${index}`}>{url}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <span className="text-muted-foreground">No background guides provided</span>
+                    )}
+                  </div>
+                  
+                  <div className="text-sm font-medium mt-2">Relevant Sources:</div>
+                  <div className="text-sm">
+                    {formData.relevantSourceUrls.filter(url => url.trim()).length > 0 ? (
+                      <ul className="list-disc list-inside">
+                        {formData.relevantSourceUrls.filter(url => url.trim()).map((url, index) => (
+                          <li key={`src-review-${index}`}>{url}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <span className="text-muted-foreground">No sources provided</span>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </motion.div>
+        );
+      
+      case 5:
+        return (
+          <motion.div
+            key="step5"
+            initial="hidden"
+            animate="visible"
+            variants={fadeIn}
+            className="space-y-6"
+          >
+            <div className="space-y-1">
+              <h2 className="text-2xl font-bold">Edit Your Position Paper</h2>
+              <p className="text-muted-foreground">
+                Review and edit the generated position paper
+              </p>
+            </div>
+            
+            <RichTextEditor
+              initialValue={generatedContent}
+              onChange={(content) => setGeneratedContent(content)}
+              className="min-h-[500px] border rounded-md"
+            />
+          </motion.div>
+        );
+      
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <DashboardLayout>
+      <div className="container max-w-5xl py-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Create Position Paper</h1>
+            <p className="text-muted-foreground">
+              Create a professional position paper for your Model UN conference
+            </p>
+          </div>
+        </div>
+        
+        <Card>
+          <CardContent className="p-6">
+            <div className="mb-8">
+              <div className="flex justify-between items-center mb-2">
+                <div className="text-sm font-medium">Step {step} of 5</div>
+                <div className="text-sm text-muted-foreground">
+                  {step === 1 && "Conference & Committee"}
+                  {step === 2 && "Background Information"}
+                  {step === 3 && "Formatting Guidelines"}
+                  {step === 4 && "Review & Generate"}
+                  {step === 5 && "Edit Paper"}
+                </div>
+              </div>
+              <div className="w-full bg-secondary h-2 rounded-full overflow-hidden">
+                <motion.div 
+                  className="h-full bg-primary"
+                  initial={{ width: `${(step - 1) * 20}%` }}
+                  animate={{ width: `${step * 20}%` }}
+                  transition={{ duration: 0.5 }}
+                />
+              </div>
+            </div>
+            
+            {renderStepContent()}
+            
+            <div className="flex justify-between mt-8">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleBack}
+                disabled={step === 1 || isLoading}
+              >
+                <ChevronLeft className="mr-2 h-4 w-4" /> Back
+              </Button>
+              
+              {step < 4 ? (
+                <Button type="button" onClick={handleNext} disabled={isLoading}>
+                  Next <ChevronRight className="ml-2 h-4 w-4" />
+                </Button>
+              ) : step === 4 ? (
+                <Button 
+                  type="button" 
+                  onClick={generatePositionPaper}
+                  disabled={isLoading}
+                  className="gap-2"
+                >
+                  {isLoading ? (
+                    <>Generating...</>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4" /> Generate Position Paper
+                    </>
+                  )}
+                </Button>
+              ) : (
+                <Button 
+                  type="button" 
+                  onClick={() => saveDocument(generatedContent)}
+                  disabled={isLoading || !isEditorReady}
+                  className="gap-2"
+                >
+                  {isLoading ? (
+                    <>Saving...</>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4" /> Save Document
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Add Conference Dialog */}
+        <Dialog open={isAddConferenceOpen} onOpenChange={setIsAddConferenceOpen}>
+          <DialogContent className="sm:max-w-[500px] p-0">
+            <DialogTitle className="sr-only">Add New Conference</DialogTitle>
+            <ConferenceForm 
+              onSuccess={handleConferenceAdded} 
+              onCancel={() => setIsAddConferenceOpen(false)} 
+            />
+          </DialogContent>
+        </Dialog>
       </div>
       <Toaster />
     </DashboardLayout>
-  )
+  );
 }
 

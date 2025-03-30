@@ -1,18 +1,29 @@
 import { NextResponse } from "next/server"
 import { createClient } from '@supabase/supabase-js'
+import { cookies } from 'next/headers'
 
-// Initialize Supabase client
+// Initialize Supabase client with URL and anon key
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-const supabase = createClient(supabaseUrl, supabaseKey)
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url)
-    const userId = searchParams.get('userId')
+    // Create a Supabase client for the request
+    const cookieStore = cookies()
+    const supabase = createClient(supabaseUrl, supabaseKey, {
+      global: {
+        headers: {
+          Cookie: cookieStore.toString(),
+        },
+      },
+    })
+
+    // Get user from session
+    const { data: { session } } = await supabase.auth.getSession()
+    const userId = session?.user?.id
 
     if (!userId) {
-      return NextResponse.json({ error: 'User ID is required' }, { status: 400 })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const { data, error } = await supabase
@@ -34,17 +45,28 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const userId = request.headers.get("user-id")
-
-  if (!userId) {
-    return NextResponse.json(
-      { error: "User ID is required" },
-      { status: 400 }
-    )
-  }
-
   try {
+    // Create a Supabase client for the request
+    const cookieStore = cookies()
+    const supabase = createClient(supabaseUrl, supabaseKey, {
+      global: {
+        headers: {
+          Cookie: cookieStore.toString(),
+        },
+      },
+    })
+
+    // Get user from session
+    const { data: { session } } = await supabase.auth.getSession()
+    const userId = session?.user?.id
+
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const body = await request.json()
+    
+    // Ensure we use the authenticated user's ID
     const conferenceData = {
       ...body,
       user_id: userId,
@@ -58,7 +80,10 @@ export async function POST(request: Request) {
       .select()
       .single()
 
-    if (error) throw error
+    if (error) {
+      console.error("Error creating conference:", error)
+      throw error
+    }
 
     return NextResponse.json(data, { status: 201 })
   } catch (error: any) {

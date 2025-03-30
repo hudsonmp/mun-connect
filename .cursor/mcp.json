@@ -2,7 +2,7 @@
   "mcpServers": {
     "supabase": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres", "${env:DATABASE_URL}"]
+      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://postgres:postgres@localhost:54322/postgres"]
     },
     "openai": {
       "command": "npx",

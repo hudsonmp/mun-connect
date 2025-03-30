@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { FileText, Plus, Calendar, Clock, Users, Flag, ChevronRight, Sparkles, FileEdit, Mic } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
+import { createClient } from '@supabase/supabase-js'
 
 // Types for our data
 interface Conference {
@@ -46,6 +47,10 @@ interface UserStats {
   awards_count: number
 }
 
+// Initialize Supabase client with URL and anon key
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
 export function DashboardContent() {
   const { user } = useAuth()
   const router = useRouter()
@@ -55,6 +60,7 @@ export function DashboardContent() {
   const [stats, setStats] = useState<UserStats | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [dataFetched, setDataFetched] = useState(false)
   
   // Add dialog state
   const [isAddConferenceOpen, setIsAddConferenceOpen] = useState(false)
@@ -90,6 +96,70 @@ export function DashboardContent() {
     }
   };
 
+  // Use useCallback to prevent recreation of fetchData function on each render
+  const fetchData = useCallback(async () => {
+    // Don't attempt to fetch if already fetched or no user
+    if (dataFetched || !user) {
+      return;
+    }
+    
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      // Create a Supabase client
+      const supabase = createClient(supabaseUrl, supabaseKey)
+
+      // Get user session to ensure authentication
+      const { data: sessionData } = await supabase.auth.getSession()
+      
+      if (!sessionData.session) {
+        throw new Error('Unauthorized: No active session')
+      }
+
+      // Fetch conferences from Supabase directly instead of API
+      const { data: conferenceData, error: conferenceError } = await supabase
+        .from('conferences')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+
+      if (conferenceError) throw new Error(conferenceError.message || 'Failed to fetch conferences')
+      setConferences(conferenceData || [])
+
+      // Fetch documents from Supabase directly instead of API
+      const { data: documentData, error: documentError } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false })
+
+      if (documentError) throw new Error(documentError.message || 'Failed to fetch documents')
+      setDocuments(documentData || [])
+
+      // Get user stats from Supabase
+      const { data: statsData, error: statsError } = await supabase
+        .from('user_stats')
+        .select('*')
+        .eq('user_id', user.id)
+        .single()
+
+      if (statsError && statsError.code !== 'PGRST116') { // Ignore "not found" error
+        throw new Error(statsError.message || 'Failed to fetch user stats')
+      }
+      setStats(statsData || null)
+      
+      // Mark data as fetched to prevent refetching
+      setDataFetched(true)
+
+    } catch (err: any) {
+      console.error('Error fetching data:', err)
+      setError(err?.message || 'An unexpected error occurred while fetching data')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [user, dataFetched]);
+
   useEffect(() => {
     // Redirect to login if not authenticated
     if (!user) {
@@ -97,48 +167,30 @@ export function DashboardContent() {
       return
     }
 
-    async function fetchData() {
-      setIsLoading(true)
-      setError(null)
-
-      try {
-        // Fetch conferences from API
-        const conferencesResponse = await fetch(`/api/conferences?userId=${user.id}`)
-        if (!conferencesResponse.ok) {
-          const errorData = await conferencesResponse.json()
-          throw new Error(errorData.error || 'Failed to fetch conferences')
-        }
-        const conferenceData = await conferencesResponse.json()
-        setConferences(conferenceData || [])
-
-        // Fetch documents from API
-        const documentsResponse = await fetch(`/api/documents?userId=${user.id}`)
-        if (!documentsResponse.ok) {
-          const errorData = await documentsResponse.json()
-          throw new Error(errorData.error || 'Failed to fetch documents')
-        }
-        const documentData = await documentsResponse.json()
-        setDocuments(documentData || [])
-
-        // Fetch user stats
-        const statsResponse = await fetch(`/api/user-stats?userId=${user.id}`)
-        if (!statsResponse.ok) {
-          const errorData = await statsResponse.json()
-          throw new Error(errorData.error || 'Failed to fetch user stats')
-        }
-        const statsData = await statsResponse.json()
-        setStats(statsData || null)
-
-      } catch (err: any) {
-        console.error('Error fetching data:', err)
-        setError(err?.message || 'An unexpected error occurred while fetching data')
-      } finally {
-        setIsLoading(false)
-      }
+    // Only fetch data once when component mounts and user is available
+    if (!dataFetched) {
+      // Use a single timeout to fetch data
+      const timer = setTimeout(() => {
+        fetchData();
+      }, 300);
+      
+      return () => clearTimeout(timer);
     }
+  }, [user, router, fetchData, dataFetched]);
 
-    fetchData()
-  }, [user, router])
+  // Add a separate effect for the fallback timeout
+  useEffect(() => {
+    // Ensure we don't get stuck in loading state
+    if (isLoading) {
+      const fallbackTimer = setTimeout(() => {
+        setIsLoading(false);
+        setDataFetched(true); // Mark as fetched even if it failed
+        console.log("Forcing loading state to complete after timeout");
+      }, 5000);
+      
+      return () => clearTimeout(fallbackTimer);
+    }
+  }, [isLoading]);
 
   // Handle conference form changes
   const handleConferenceFormChange = (field: string, value: string) => {
@@ -190,13 +242,13 @@ export function DashboardContent() {
         .join('')
         .toUpperCase()
 
-      const response = await fetch('/api/conferences', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'user-id': user.id,
-        },
-        body: JSON.stringify({
+      // Create a Supabase client
+      const supabase = createClient(supabaseUrl, supabaseKey)
+      
+      // Create the conference directly with Supabase
+      const { data: newConference, error } = await supabase
+        .from('conferences')
+        .insert({
           user_id: user.id,
           name: conferenceForm.name,
           acronym: acronym,
@@ -204,16 +256,16 @@ export function DashboardContent() {
           committee: conferenceForm.committee,
           role: conferenceForm.role,
           status: conferenceForm.status,
-          progress: 0
+          progress: 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         })
-      })
+        .select()
+        .single()
 
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to create conference')
+      if (error) {
+        throw new Error(error.message || 'Failed to create conference')
       }
-
-      const newConference = await response.json()
       
       // Update conferences list with new conference
       setConferences([...conferences, newConference])
