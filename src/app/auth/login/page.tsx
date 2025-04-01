@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -13,22 +13,36 @@ import { useAuth } from "@/lib/auth-context"
 export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
   const router = useRouter()
-  const { signIn } = useAuth()
+  const { signIn, error, clearError, isInitialized, isLoading } = useAuth()
+
+  // Clear any auth errors when component mounts or unmounts
+  useEffect(() => {
+    clearError()
+    return () => clearError()
+  }, [clearError])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Prevent login attempts if auth is not initialized
+    if (!isInitialized) {
+      console.error("Auth system not initialized")
+      return
+    }
+    
     setLoading(true)
-    setError("")
 
     try {
-      await signIn(email, password)
-      // Redirect to dashboard on successful login
-      router.push("/")
-    } catch (err: any) {
-      setError(err.message || "An error occurred during sign in")
+      const result = await signIn(email, password)
+      
+      if (result.success) {
+        // Successful login - redirection is handled by auth context
+      }
+    } catch (err) {
+      // Error handling is managed by auth context
+      console.error("Login error:", err)
     } finally {
       setLoading(false)
     }
@@ -48,6 +62,14 @@ export default function LoginPage() {
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
+            
+            {!isInitialized && !isLoading && (
+              <Alert variant="destructive">
+                <AlertDescription>
+                  Authentication system is not initialized. Please check your configuration or try again later.
+                </AlertDescription>
+              </Alert>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -57,6 +79,7 @@ export default function LoginPage() {
                 placeholder="email@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={loading || !isInitialized}
                 required
               />
             </div>
@@ -75,12 +98,17 @@ export default function LoginPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                disabled={loading || !isInitialized}
                 required
               />
             </div>
           </CardContent>
           <CardFooter className="flex flex-col space-y-4">
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button 
+              type="submit" 
+              className="w-full" 
+              disabled={loading || !isInitialized}
+            >
               {loading ? "Signing in..." : "Sign in"}
             </Button>
             <div className="text-center text-sm">

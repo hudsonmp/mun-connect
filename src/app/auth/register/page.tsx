@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -9,43 +9,69 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useAuth } from "@/lib/auth-context"
+import { useToast } from "@/components/ui/use-toast"
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
-  const [error, setError] = useState("")
+  const [validationError, setValidationError] = useState("")
   const [loading, setLoading] = useState(false)
   const router = useRouter()
-  const { signUp } = useAuth()
+  const { signUp, error, clearError, isInitialized, isLoading } = useAuth()
+  const { toast } = useToast()
+
+  // Clear any auth errors when component mounts or unmounts
+  useEffect(() => {
+    clearError()
+    return () => clearError()
+  }, [clearError])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Prevent signup attempts if auth is not initialized
+    if (!isInitialized) {
+      console.error("Auth system not initialized")
+      return
+    }
+    
     setLoading(true)
-    setError("")
+    setValidationError("")
 
     // Basic validation
     if (password !== confirmPassword) {
-      setError("Passwords do not match")
+      setValidationError("Passwords do not match")
       setLoading(false)
       return
     }
 
     if (password.length < 6) {
-      setError("Password must be at least 6 characters")
+      setValidationError("Password must be at least 6 characters")
       setLoading(false)
       return
     }
 
     try {
-      await signUp(email, password)
-      // Redirect is handled in the auth context
-    } catch (err: any) {
-      setError(err.message || "An error occurred during registration")
+      const result = await signUp(email, password)
+      
+      if (result.success) {
+        toast({
+          title: "Registration successful",
+          description: "Please check your email to confirm your account, then you can log in.",
+        })
+        router.push("/auth/login")
+      }
+    } catch (err) {
+      // Error handling is managed by auth context
+      console.error("Registration error:", err)
     } finally {
       setLoading(false)
     }
   }
+
+  // Show either validation error or auth error
+  const displayError = validationError || error
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
@@ -56,9 +82,17 @@ export default function RegisterPage() {
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
-            {error && (
+            {displayError && (
               <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
+                <AlertDescription>{displayError}</AlertDescription>
+              </Alert>
+            )}
+            
+            {!isInitialized && !isLoading && (
+              <Alert variant="destructive">
+                <AlertDescription>
+                  Authentication system is not initialized. Please check your configuration or try again later.
+                </AlertDescription>
               </Alert>
             )}
 
@@ -70,6 +104,7 @@ export default function RegisterPage() {
                 placeholder="email@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={loading || !isInitialized}
                 required
               />
             </div>
@@ -80,6 +115,7 @@ export default function RegisterPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                disabled={loading || !isInitialized}
                 required
               />
               <p className="text-xs text-muted-foreground">Password must be at least 6 characters</p>
@@ -91,6 +127,7 @@ export default function RegisterPage() {
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
+                disabled={loading || !isInitialized}
                 required
               />
             </div>
@@ -99,7 +136,7 @@ export default function RegisterPage() {
             <Button
               type="submit"
               className="w-full"
-              disabled={loading}
+              disabled={loading || !isInitialized}
             >
               {loading ? "Creating account..." : "Create account"}
             </Button>

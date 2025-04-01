@@ -249,186 +249,122 @@ export default function NewPositionPaper() {
     });
   }
 
-  const generatePositionPaper = async () => {
-    if (!user || !user.id) {
-      console.error("User not authenticated or missing ID:", user)
-      toast({
-        title: "Authentication required",
-        description: "Please sign in to generate a position paper",
-        variant: "destructive",
-      })
-      return
+  // Add the getAccessToken function before the generatePositionPaper function
+  const getAccessToken = async (): Promise<string | null> => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      return sessionData.session?.access_token || null;
+    } catch (error) {
+      console.error("Error getting access token:", error);
+      return null;
     }
+  };
+
+  const generatePositionPaper = async () => {
+    // Don't proceed if already loading or no user
+    if (isLoading || !user) return;
     
-    // Validate form
-    if (!formData.conference || !formData.committee || !formData.topic || !formData.country) {
+    // Validate required fields
+    const requiredFields = ['country', 'committee', 'topic', 'conference'] as const;
+    const missingFields = requiredFields.filter(field => !formData[field]);
+    
+    if (missingFields.length > 0) {
       toast({
         title: "Missing information",
-        description: "Please fill out all required fields",
+        description: `Please provide: ${missingFields.join(', ')}`,
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
-    
-    setIsLoading(true)
-    console.log("Generating position paper with user ID:", user.id)
-    
+
     try {
-      // Create Supabase client and ensure profile exists - use shared client
-      // Check if user profile exists
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('id', user.id)
-        .single()
+      setIsLoading(true);
+      console.log("Generating position paper...");
       
-      // If profile doesn't exist, create it
-      if (profileError) {
-        console.log("Profile not found, creating profile for user:", user.id)
-        const { error: createError } = await supabase
-          .from('profiles')
-          .insert({
-            id: user.id,
-            email: user.email,
-            full_name: user.user_metadata?.full_name || '',
-            username: user.email?.split('@')[0] || `user_${Date.now()}`,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
-        
-        if (createError) {
-          console.error("Error creating profile:", createError)
-          throw new Error("Failed to create user profile. Please try again or contact support.")
-        }
-      }
+      // Get access token for authorization header if available
+      const accessToken = await getAccessToken();
       
-      // Create form data for file upload if needed
-      const formDataObj = new FormData()
-      if (pdfFile && pdfFile.type === 'application/pdf') {
-        formDataObj.append('pdf', pdfFile)
-      }
-      
-      // Prepare request data
+      // Simplify request data - include only necessary fields
       const requestData = {
-        conference: formData.conference,
-        committee: formData.committee,
-        committee_type: formData.committee_type,
-        topic: formData.topic,
         country: formData.country,
-        background_text: formData.backgroundText,
+        committee: formData.committee,
+        committee_type: formData.committee_type || 'General Assembly',
+        topic: formData.topic,
+        conference: formData.conference,
+        template: formData.template || 'Standard Position Paper',
+        background_text: formData.backgroundText || '',
         background_guide_urls: formData.backgroundGuideUrls.filter(url => url.trim()),
         relevant_source_urls: formData.relevantSourceUrls.filter(url => url.trim()),
-        position_paper_guidelines: formData.positionPaperGuidelines,
-        formatting_tips_page: formData.formattingTipsPage,
-        template: formData.template,
-        custom_requirements: formData.customRequirements,
-        user_id: user.id,
-      }
+        position_paper_guidelines: formData.positionPaperGuidelines || '',
+        custom_requirements: formData.customRequirements || ''
+      };
       
-      console.log("Request data:", requestData)
+      // Make a simple fetch request without file handling for now
+      const response = await fetch("/api/ai/generate-position-paper", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "user-id": user.id,
+          ...(accessToken ? { "Authorization": `Bearer ${accessToken}` } : {})
+        },
+        body: JSON.stringify(requestData),
+      });
       
-      // Get current session
-      const { data: sessionData } = await supabase.auth.getSession()
+      console.log("Response status:", response.status);
       
-      if (!sessionData.session) {
-        console.error("No active session found")
-        throw new Error("Authentication session expired. Please log in again.")
-      }
-      
-      const accessToken = sessionData.session.access_token
-      console.log("Got access token:", accessToken ? "Yes (length: " + accessToken.length + ")" : "No")
-      
-      // If we have a PDF file, handle it separately with FormData
-      let response;
-      if (pdfFile && pdfFile.type === 'application/pdf') {
-        // Add all text fields to FormData
-        Object.entries(requestData).forEach(([key, value]) => {
-          if (Array.isArray(value)) {
-            value.forEach(item => formDataObj.append(`${key}[]`, item))
-          } else {
-            formDataObj.append(key, String(value))
-          }
-        })
-        
-        response = await fetch("/api/ai/generate-position-paper", {
-          method: "POST",
-          headers: {
-            "user-id": user.id,
-            "Authorization": `Bearer ${accessToken}`,
-          },
-          body: formDataObj,
-        })
-      } else {
-        // Standard JSON request without file
-        response = await fetch("/api/ai/generate-position-paper", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "user-id": user.id,
-            "Authorization": `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify(requestData),
-        })
-      }
-      
-      console.log("Response status:", response.status)
-      
+      // Handle non-OK responses
       if (!response.ok) {
         let errorMessage = "Failed to generate position paper";
-        
-        if (response.status === 401) {
-          errorMessage = "Authentication error. Please log out and log back in.";
-          toast({
-            title: "Session expired",
-            description: "Your session has expired. Please log out and log back in.",
-            variant: "destructive",
-          });
-          
-          // Don't auto-redirect as it might be confusing to users
-          setIsLoading(false);
-          return;
-        }
         
         try {
           const errorData = await response.json();
           console.error("Position paper generation error:", errorData);
           errorMessage = errorData.error || errorMessage;
+          
+          // Handle specific error types
+          if (response.status === 401) {
+            toast({
+              title: "Authentication error",
+              description: "Your session has expired. Please log in again.",
+              variant: "destructive",
+            });
+            router.push('/auth/login');
+            return;
+          }
+          
+          throw new Error(errorMessage);
         } catch (parseError) {
-          const text = await response.text();
-          console.error("Error parsing error response:", text);
+          console.error("Error parsing error response:", parseError);
+          throw new Error(errorMessage);
         }
-        
-        throw new Error(errorMessage);
       }
       
-      let data;
-      try {
-        const text = await response.text();
-        data = JSON.parse(text);
-      } catch (e) {
-        console.error("Error parsing success response:", e);
-        throw new Error("Invalid response format from server");
+      // Parse successful response
+      const data = await response.json();
+      
+      if (!data.content) {
+        throw new Error("No content returned from server");
       }
       
-      console.log("Position paper generated successfully");
+      // Set the generated content
       setGeneratedContent(data.content);
       
       toast({
         title: "Position paper generated",
         description: "Your position paper has been successfully generated",
-      })
+      });
       
       // Move to edit mode
-      setStep(5)
-    } catch (error: any) {
-      console.error("Position paper generation exception:", error)
+      setStep(5);
+    } catch (error) {
+      console.error("Position paper generation error:", error);
       toast({
         title: "Error generating position paper",
-        description: error.message || "An unexpected error occurred",
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
         variant: "destructive",
-      })
+      });
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
   }
 

@@ -90,4 +90,21 @@ def get_session():
 
 def reset_password(email):
     """Send a password reset email."""
-    return supabase.auth.reset_password_for_email(email) 
+    return supabase.auth.reset_password_for_email(email)
+
+# Rate limiting functions
+def get_user_rate_limits(user_id):
+    """Get rate limiting data for a user."""
+    return supabase.table('rate_limits').select('*').eq('user_id', user_id).single().execute()
+
+def update_user_rate_limits(user_id, rate_data):
+    """Update rate limiting data for a user."""
+    # Check if rate limit record exists
+    existing = get_user_rate_limits(user_id)
+    
+    if existing.data:
+        # Update existing record
+        return supabase.table('rate_limits').update(rate_data).eq('user_id', user_id).execute()
+    else:
+        # Create new record
+        return supabase.table('rate_limits').insert(rate_data).execute() 

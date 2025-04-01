@@ -10,6 +10,7 @@ interface RichTextEditorProps {
   height?: number
   placeholder?: string
   className?: string
+  minimal?: boolean
 }
 
 export function RichTextEditor({
@@ -17,7 +18,8 @@ export function RichTextEditor({
   onChange,
   height = 500,
   placeholder = 'Start typing...',
-  className
+  className,
+  minimal = false
 }: RichTextEditorProps) {
   const editorRef = useRef<any>(null)
   const [content, setContent] = useState(initialValue)
@@ -72,6 +74,22 @@ export function RichTextEditor({
     );
   }
 
+  // Configure editor based on minimal mode
+  const plugins = minimal
+    ? ['autolink', 'lists', 'link', 'charmap', 'preview', 'searchreplace', 'wordcount']
+    : ['advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
+       'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
+       'insertdatetime', 'media', 'table', 'code', 'help', 'wordcount',
+       'exportpdf', 'exportword'];
+       
+  const toolbar = minimal
+    ? 'bold italic | bullist numlist | link | removeformat'
+    : 'undo redo | formatselect | bold italic forecolor | alignleft aligncenter ' +
+      'alignright alignjustify | bullist numlist outdent indent | ' +
+      'removeformat | help | exportpdf exportword';
+      
+  const menubar = !minimal;
+
   return (
     <div className={className}>
       <Editor
@@ -80,17 +98,9 @@ export function RichTextEditor({
         initialValue={initialValue}
         init={{
           height,
-          menubar: true,
-          plugins: [
-            'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
-            'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
-            'insertdatetime', 'media', 'table', 'code', 'help', 'wordcount',
-            'exportpdf', 'exportword'
-          ],
-          toolbar: 'undo redo | formatselect | ' +
-            'bold italic forecolor | alignleft aligncenter ' +
-            'alignright alignjustify | bullist numlist outdent indent | ' +
-            'removeformat | help | exportpdf exportword',
+          menubar,
+          plugins,
+          toolbar,
           content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:14px }',
           placeholder,
           exportpdf_converter_options: {

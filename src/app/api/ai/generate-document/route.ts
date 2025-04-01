@@ -11,15 +11,41 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = await request.json()
+    // Check if the request is a FormData
+    const contentType = request.headers.get("Content-Type") || ""
     
-    const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/api/ai/generate-document`, {
+    // Set up the backend URL with error handling
+    const backendUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    
+    if (!backendUrl) {
+      console.error("Missing NEXT_PUBLIC_SUPABASE_URL environment variable")
+      return NextResponse.json(
+        { error: "Server configuration error" }, 
+        { status: 500 }
+      )
+    }
+    
+    let requestBody: FormData | string
+    // Use Record<string, string> to create a dynamically keyed object for headers
+    let headers: Record<string, string> = {
+      "user-id": userId
+    }
+    
+    if (contentType.includes("multipart/form-data")) {
+      // Handle FormData by cloning and forwarding
+      requestBody = await request.formData()
+      
+      // No need to set Content-Type for FormData as it will be set automatically with boundary
+    } else {
+      // Handle JSON request
+      requestBody = JSON.stringify(await request.json())
+      headers["Content-Type"] = "application/json"
+    }
+    
+    const response = await fetch(`${backendUrl}/api/ai/generate-document`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "user-id": userId
-      },
-      body: JSON.stringify(body)
+      headers,
+      body: requestBody
     })
 
     if (!response.ok) {
