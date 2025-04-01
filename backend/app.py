@@ -857,5 +857,772 @@ def improve_document():
         app.logger.error(f"Unexpected error in improve_document: {str(e)}")
         return jsonify({"error": "Server error", "details": str(e)}), 500
 
+# User onboarding routes
+@app.route('/api/onboarding/status', methods=['GET'])
+def get_onboarding_status():
+    """Check if the user has completed onboarding"""
+    try:
+        user_id = request.headers.get('user-id')
+        if not user_id:
+            return jsonify({"error": "User ID required"}), 400
+        
+        is_onboarded = db.check_user_onboarding_status(user_id)
+        return jsonify({"is_onboarded": is_onboarded}), 200
+    except Exception as e:
+        app.logger.error(f"Error checking onboarding status: {str(e)}")
+        return jsonify({"error": str(e)}), 400
+
+@app.route('/api/onboarding/writing-profile', methods=['POST'])
+def create_writing_profile():
+    """Process and create a writing style profile during onboarding"""
+    if not openai.api_key:
+        return jsonify({"error": "Server configuration error: OpenAI API key not found"}), 500
+    
+    try:
+        user_id = request.headers.get('user-id')
+        if not user_id:
+            return jsonify({"error": "User ID required"}), 400
+        
+        # Parse request data
+        data = request.get_json()
+        
+        writing_samples = data.get('writing_samples', '')
+        preferred_topics = data.get('preferred_topics', [])
+        preferred_countries = data.get('preferred_countries', [])
+        
+        # Don't process if samples are too short
+        if len(writing_samples) < 50:
+            # Store minimal profile without AI processing
+            profile_data = {
+                "writing_style": "default",
+                "tone": "formal",
+                "sentence_structure": "balanced",
+                "complexity_level": "intermediate",
+                "formality_level": "formal",
+                "creativity_level": "balanced",
+                "sample_document_content": writing_samples[:100] if writing_samples else "",  # Store just a brief sample
+                "parsed_style_data": {}
+            }
+            
+            db.create_user_writing_profile(user_id, profile_data)
+            
+            # Update user stats with preferences
+            db.update_user_stats(user_id, {
+                "preferred_topics": preferred_topics,
+                "preferred_countries": preferred_countries
+            })
+            
+            return jsonify({
+                "message": "Basic writing profile created. AI analysis skipped due to limited sample text.",
+                "profile": profile_data
+            }), 201
+        
+        # Process with AI if samples are long enough
+        try:
+            system_prompt = """You are an expert writing analyst. Analyze the provided writing sample(s) 
+            and extract key stylistic elements. Return a JSON object with the following fields:
+            - writing_style: a brief description of the overall writing style
+            - tone: the tone of the writing (formal, casual, etc.)
+            - sentence_structure: description of sentence complexity and variety
+            - complexity_level: one of [basic, intermediate, advanced]
+            - formality_level: one of [casual, neutral, formal, very formal]
+            - creativity_level: one of [factual, balanced, creative]
+            - key_patterns: array of notable writing patterns
+            
+            Ensure the analysis is objective and focuses on STYLE, not content."""
+            
+            user_prompt = f"""Analyze the following writing sample(s) for stylistic elements only:
+
+{writing_samples}
+
+Remember to return ONLY a JSON object with the specified fields."""
+            
+            response = openai.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.3,
+                max_tokens=500,
+                response_format={"type": "json_object"}
+            )
+            
+            # Extract the analysis from the API response
+            if not response or not response.choices or len(response.choices) == 0:
+                raise Exception("Empty response from AI model")
+            
+            analysis_text = response.choices[0].message.content
+            
+            # Parse the JSON response
+            import json
+            try:
+                analysis = json.loads(analysis_text)
+            except json.JSONDecodeError:
+                # If parsing fails, create a default analysis
+                analysis = {
+                    "writing_style": "default",
+                    "tone": "formal",
+                    "sentence_structure": "balanced",
+                    "complexity_level": "intermediate",
+                    "formality_level": "formal", 
+                    "creativity_level": "balanced",
+                    "key_patterns": []
+                }
+            
+            # Store the writing profile
+            profile_data = {
+                "writing_style": analysis.get("writing_style", "default"),
+                "tone": analysis.get("tone", "formal"),
+                "sentence_structure": analysis.get("sentence_structure", "balanced"),
+                "complexity_level": analysis.get("complexity_level", "intermediate"),
+                "formality_level": analysis.get("formality_level", "formal"),
+                "creativity_level": analysis.get("creativity_level", "balanced"),
+                "sample_document_content": writing_samples[:500],  # Store a sample, limited to 500 chars
+                "parsed_style_data": analysis
+            }
+            
+            db.create_user_writing_profile(user_id, profile_data)
+            
+            # Update user stats with preferences
+            db.update_user_stats(user_id, {
+                "preferred_topics": preferred_topics,
+                "preferred_countries": preferred_countries
+            })
+            
+            return jsonify({
+                "message": "Writing profile created successfully",
+                "profile": profile_data
+            }), 201
+            
+        except Exception as ai_err:
+            app.logger.error(f"Error analyzing writing style: {str(ai_err)}")
+            # Create a default profile if AI analysis fails
+            profile_data = {
+                "writing_style": "default",
+                "tone": "formal",
+                "sentence_structure": "balanced",
+                "complexity_level": "intermediate",
+                "formality_level": "formal",
+                "creativity_level": "balanced",
+                "sample_document_content": writing_samples[:100] if writing_samples else "",
+                "parsed_style_data": {
+                    "error": "AI analysis failed, using default values"
+                }
+            }
+            
+            db.create_user_writing_profile(user_id, profile_data)
+            
+            # Update user stats with preferences
+            db.update_user_stats(user_id, {
+                "preferred_topics": preferred_topics,
+                "preferred_countries": preferred_countries
+            })
+            
+            return jsonify({
+                "message": "Basic writing profile created. AI analysis failed.",
+                "profile": profile_data
+            }), 201
+            
+    except Exception as e:
+        app.logger.error(f"Error creating writing profile: {str(e)}")
+        return jsonify({"error": str(e)}), 400
+
+@app.route('/api/onboarding/complete', methods=['POST'])
+def complete_onboarding():
+    """Mark user onboarding as complete"""
+    try:
+        user_id = request.headers.get('user-id')
+        if not user_id:
+            return jsonify({"error": "User ID required"}), 400
+        
+        db.complete_user_onboarding(user_id)
+        return jsonify({"message": "Onboarding completed successfully"}), 200
+    except Exception as e:
+        app.logger.error(f"Error completing onboarding: {str(e)}")
+        return jsonify({"error": str(e)}), 400
+
+# Document creation session routes
+@app.route('/api/document-sessions', methods=['POST'])
+def create_document_session():
+    """Create a new document creation session"""
+    try:
+        user_id = request.headers.get('user-id')
+        if not user_id:
+            return jsonify({"error": "User ID required"}), 400
+        
+        data = request.get_json()
+        document_type = data.get('document_type')
+        
+        if not document_type:
+            return jsonify({"error": "Document type is required"}), 400
+        
+        # Create the session
+        session_data = {
+            "document_type": document_type,
+            "status": "in_progress"
+        }
+        
+        response = db.create_document_creation_session(user_id, session_data)
+        
+        return jsonify({
+            "message": "Document creation session started",
+            "session": response.data[0] if response.data else None
+        }), 201
+    except Exception as e:
+        app.logger.error(f"Error creating document session: {str(e)}")
+        return jsonify({"error": str(e)}), 400
+
+@app.route('/api/document-sessions/<int:session_id>', methods=['GET'])
+def get_document_session(session_id):
+    """Get a specific document creation session"""
+    try:
+        user_id = request.headers.get('user-id')
+        if not user_id:
+            return jsonify({"error": "User ID required"}), 400
+        
+        response = db.get_document_creation_session(session_id, user_id)
+        
+        if not response.data:
+            return jsonify({"error": "Session not found"}), 404
+        
+        return jsonify(response.data), 200
+    except Exception as e:
+        app.logger.error(f"Error getting document session: {str(e)}")
+        return jsonify({"error": str(e)}), 400
+
+@app.route('/api/document-sessions/<int:session_id>', methods=['PUT'])
+def update_document_session(session_id):
+    """Update a document creation session"""
+    try:
+        user_id = request.headers.get('user-id')
+        if not user_id:
+            return jsonify({"error": "User ID required"}), 400
+        
+        data = request.get_json()
+        
+        response = db.update_document_creation_session(session_id, user_id, data)
+        
+        return jsonify({
+            "message": "Session updated successfully",
+            "session": response.data[0] if response.data else None
+        }), 200
+    except Exception as e:
+        app.logger.error(f"Error updating document session: {str(e)}")
+        return jsonify({"error": str(e)}), 400
+
+@app.route('/api/document-sessions/<int:session_id>/upload-background', methods=['POST'])
+def upload_background_guide(session_id):
+    """Upload and process a background guide for a document session"""
+    if not openai.api_key:
+        return jsonify({"error": "Server configuration error: OpenAI API key not found"}), 500
+    
+    try:
+        user_id = request.headers.get('user-id')
+        if not user_id:
+            return jsonify({"error": "User ID required"}), 400
+        
+        # Verify session exists
+        session_response = db.get_document_creation_session(session_id, user_id)
+        if not session_response.data:
+            return jsonify({"error": "Session not found"}), 404
+        
+        # Get the file
+        if 'file' not in request.files:
+            return jsonify({"error": "No file provided"}), 400
+        
+        file = request.files['file']
+        
+        if file.filename == '':
+            return jsonify({"error": "No file selected"}), 400
+        
+        # Check file size (5MB max)
+        file_data = file.read()
+        file.seek(0)  # Reset file pointer after reading
+        
+        if len(file_data) > 5 * 1024 * 1024:
+            return jsonify({"error": "File too large (max 5MB)"}), 400
+        
+        # Parse the file to extract text
+        try:
+            from utils.document_parser import extract_text_from_file
+            extracted_text = extract_text_from_file(file_data, file.content_type)
+            
+            if not extracted_text or len(extracted_text) < 100:
+                return jsonify({"error": "Could not extract sufficient text from the file"}), 400
+            
+            # Extract formatting guidelines if they exist
+            try:
+                # Look for formatting guidelines in the first 5000 characters
+                sample_text = extracted_text[:5000].lower()
+                
+                system_prompt = """You are a document analyst specialized in Model UN background guides.
+                Analyze the beginning of the provided background guide and extract ONLY the formatting guidelines for position papers,
+                if they exist. Return ONLY the exact formatting guidelines as a string. If no specific formatting guidelines
+                are found, return 'No specific formatting guidelines found.'"""
+                
+                response = openai.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": f"Extract position paper formatting guidelines from this background guide:\n\n{sample_text}"}
+                    ],
+                    temperature=0.3,
+                    max_tokens=300
+                )
+                
+                formatting_guidelines = response.choices[0].message.content
+                
+                # If no guidelines found, it will contain the "No specific" text
+                
+            except Exception as format_err:
+                app.logger.error(f"Error extracting formatting guidelines: {str(format_err)}")
+                formatting_guidelines = "No specific formatting guidelines found."
+            
+            # Update the session with the extracted text
+            update_data = {
+                "background_guide_text": extracted_text,
+                "extracted_formatting": formatting_guidelines if "No specific" not in formatting_guidelines else None
+            }
+            
+            db.update_document_creation_session(session_id, user_id, update_data)
+            
+            return jsonify({
+                "message": "Background guide processed successfully",
+                "text_length": len(extracted_text),
+                "has_formatting_guidelines": "No specific" not in formatting_guidelines,
+                "formatting_guidelines": formatting_guidelines if "No specific" not in formatting_guidelines else None
+            }), 200
+            
+        except Exception as parse_err:
+            app.logger.error(f"Error parsing document: {str(parse_err)}")
+            return jsonify({"error": f"Failed to parse document: {str(parse_err)}"}), 400
+        
+    except Exception as e:
+        app.logger.error(f"Error uploading background guide: {str(e)}")
+        return jsonify({"error": str(e)}), 400
+
+@app.route('/api/document-sessions/<int:session_id>/analyze-topic', methods=['POST'])
+def analyze_topic(session_id):
+    """Analyze the specified topic and create a mind map from the background guide"""
+    if not openai.api_key:
+        return jsonify({"error": "Server configuration error: OpenAI API key not found"}), 500
+    
+    try:
+        user_id = request.headers.get('user-id')
+        if not user_id:
+            return jsonify({"error": "User ID required"}), 400
+        
+        # Get the session
+        session_response = db.get_document_creation_session(session_id, user_id)
+        if not session_response.data:
+            return jsonify({"error": "Session not found"}), 404
+        
+        session = session_response.data
+        
+        # Get the topic from request
+        data = request.get_json()
+        topic = data.get('topic')
+        
+        if not topic:
+            return jsonify({"error": "Topic is required"}), 400
+        
+        # Update the session with the topic
+        db.update_document_creation_session(session_id, user_id, {"topic": topic})
+        
+        # Check if we have a background guide to analyze
+        if not session.get('background_guide_text'):
+            return jsonify({
+                "message": "No background guide available for analysis", 
+                "mind_map": None
+            }), 200
+        
+        # Extract relevant portions of the background guide for the topic
+        background_text = session.get('background_guide_text')
+        
+        try:
+            # Create a mind map of the topic from the background guide
+            system_prompt = """You are an expert at analyzing Model UN background guides. 
+            Create a detailed mind map in JSON format for the specified topic based on the provided background guide.
+            Focus ONLY on the parts of the guide that are relevant to the specified topic.
+            
+            Return a JSON object with the following structure:
+            {
+                "topic": "The main topic",
+                "subtopics": [
+                    {
+                        "name": "Subtopic name",
+                        "key_points": ["Point 1", "Point 2"],
+                        "relevant_actors": ["Actor 1", "Actor 2"]
+                    }
+                ],
+                "key_issues": ["Issue 1", "Issue 2"],
+                "historical_context": ["Context 1", "Context 2"],
+                "potential_solutions": ["Solution 1", "Solution 2"],
+                "countries_mentioned": ["Country 1", "Country 2"]
+            }"""
+            
+            user_prompt = f"""Create a mind map for the topic "{topic}" based on this background guide:
+
+{background_text[:8000]}  # Limit to 8000 characters to stay within token limits
+
+Return ONLY the JSON mind map without additional explanations."""
+            
+            response = openai.chat.completions.create(
+                model="gpt-4o-mini",  # Use a more capable model for complex analysis
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.7,
+                max_tokens=1000,
+                response_format={"type": "json_object"}
+            )
+            
+            # Extract the mind map JSON
+            mind_map_text = response.choices[0].message.content
+            
+            # Parse the JSON
+            import json
+            try:
+                mind_map = json.loads(mind_map_text)
+            except json.JSONDecodeError:
+                # If parsing fails, create a simple mind map
+                mind_map = {
+                    "topic": topic,
+                    "subtopics": [],
+                    "key_issues": [],
+                    "historical_context": [],
+                    "potential_solutions": [],
+                    "countries_mentioned": []
+                }
+            
+            # Update the session with the mind map
+            db.update_document_creation_session(session_id, user_id, {"mind_map": mind_map})
+            
+            return jsonify({
+                "message": "Topic analyzed successfully",
+                "mind_map": mind_map
+            }), 200
+            
+        except Exception as analyze_err:
+            app.logger.error(f"Error analyzing topic: {str(analyze_err)}")
+            return jsonify({"error": f"Failed to analyze topic: {str(analyze_err)}"}), 400
+        
+    except Exception as e:
+        app.logger.error(f"Error analyzing topic: {str(e)}")
+        return jsonify({"error": str(e)}), 400
+
+@app.route('/api/document-sessions/<int:session_id>/generate-document', methods=['POST'])
+def generate_document_from_session(session_id):
+    """Generate a document based on the session data with web search augmentation"""
+    if not openai.api_key:
+        return jsonify({"error": "Server configuration error: OpenAI API key not found"}), 500
+    
+    try:
+        user_id = request.headers.get('user-id')
+        if not user_id:
+            return jsonify({"error": "User ID required"}), 400
+        
+        # Get the session
+        session_response = db.get_document_creation_session(session_id, user_id)
+        if not session_response.data:
+            return jsonify({"error": "Session not found"}), 404
+        
+        session = session_response.data
+        
+        # Validate required fields
+        required_fields = ['document_type', 'committee', 'country', 'topic']
+        missing_fields = [field for field in required_fields if not session.get(field)]
+        
+        if missing_fields:
+            return jsonify({
+                "error": "Missing required fields", 
+                "details": f"The following fields are required: {', '.join(missing_fields)}"
+            }), 400
+        
+        # Mark session as generating
+        db.update_document_creation_session(session_id, user_id, {"status": "generating"})
+        
+        # Get user's writing profile
+        profile_response = db.get_user_writing_profile(user_id)
+        writing_profile = profile_response.data if profile_response.data else {}
+        
+        # Prepare data for generation
+        document_type = session.get('document_type')
+        committee = session.get('committee')
+        country = session.get('country')
+        topic = session.get('topic')
+        mind_map = session.get('mind_map', {})
+        background_guide_text = session.get('background_guide_text', '')
+        formatting_guidelines = session.get('extracted_formatting')
+        
+        # Get additional context from the request
+        data = request.get_json()
+        additional_context = data.get('additional_context', '')
+        
+        try:
+            # First call: Look up additional information on the web about the topic and country position
+            web_search_system_prompt = """You are a Model UN research assistant. 
+            Based on the topic and country provided, what are the 3-5 most important web searches we should make to find:
+            1. Recent developments on this topic (last 2 years)
+            2. The country's actual position and policies on this topic
+            3. Relevant UN resolutions or international agreements
+            
+            Return ONLY a JSON array of search queries, with no additional text."""
+            
+            web_search_prompt = f"""Create web search queries for researching:
+            
+            TOPIC: {topic}
+            COUNTRY: {country}
+            COMMITTEE: {committee}
+            
+            Return ONLY the JSON array of search queries."""
+            
+            search_response = openai.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": web_search_system_prompt},
+                    {"role": "user", "content": web_search_prompt}
+                ],
+                temperature=0.5,
+                max_tokens=300,
+                response_format={"type": "json_object"}
+            )
+            
+            import json
+            try:
+                search_queries = json.loads(search_response.choices[0].message.content)
+                # If returned object is not a list but has a "queries" field
+                if isinstance(search_queries, dict) and "queries" in search_queries:
+                    search_queries = search_queries["queries"]
+                # If it's still not a list, convert to list
+                if not isinstance(search_queries, list):
+                    search_queries = [str(search_queries)]
+            except (json.JSONDecodeError, TypeError):
+                # Fallback if JSON parsing fails
+                search_queries = [f"{country} position on {topic}", f"recent developments {topic}", f"UN {committee} {topic}"]
+            
+            # Simulate web search results (in a real app, this would be an actual search API call)
+            # This is a placeholder for demonstration
+            search_results_combined = f"""
+            Web search results for: {', '.join(search_queries[:3])}
+            
+            SIMULATED SEARCH RESULTS: In a production environment, this would contain actual search results
+            from a search API or web scraping. For this demonstration, we're simulating relevant web content.
+            
+            Recent information about {topic} includes several key developments in the past year.
+            {country} has generally supported international cooperation on this issue through various UN forums.
+            
+            The most recent UN resolution related to this topic was passed in the General Assembly last year,
+            calling for increased cooperation among member states.
+            """
+            
+            # Prepare writing style guidelines based on user profile
+            writing_style_guidelines = "Use formal diplomatic language appropriate for Model UN."
+            
+            if writing_profile:
+                writing_style_guidelines = f"""
+                Writing style: {writing_profile.get('writing_style', 'formal')}
+                Tone: {writing_profile.get('tone', 'formal diplomatic')}
+                Sentence structure: {writing_profile.get('sentence_structure', 'varied')}
+                Complexity level: {writing_profile.get('complexity_level', 'intermediate')}
+                Formality level: {writing_profile.get('formality_level', 'formal')}
+                Creativity level: {writing_profile.get('creativity_level', 'balanced')}
+                """
+            
+            # Prepare the system prompt based on document type
+            if document_type == 'position_paper':
+                system_prompt = f"""You are an expert Model UN advisor helping create a position paper.
+
+WRITING STYLE GUIDELINES:
+{writing_style_guidelines}
+
+FORMATTING GUIDELINES:
+{formatting_guidelines if formatting_guidelines else "Follow standard Model UN position paper format."}
+
+Create a formal, well-researched position paper that:
+1. States {country}'s position on {topic}
+2. References information from the background guide AND recent developments
+3. Includes specific policy proposals aligned with {country}'s actual foreign policy
+4. Uses proper citations for factual claims
+5. Is structured with clear introduction, body, and conclusion
+6. Is approximately 1000-1500 words
+
+Use formal diplomatic language. Incorporate relevant details from the background guide and web research.
+Format the document with proper HTML tags for headings, paragraphs, and lists."""
+
+            elif document_type == 'resolution':
+                system_prompt = f"""You are an expert Model UN advisor helping create a resolution paper.
+
+WRITING STYLE GUIDELINES:
+{writing_style_guidelines}
+
+FORMATTING GUIDELINES:
+{formatting_guidelines if formatting_guidelines else "Follow standard Model UN resolution format with preambulatory and operative clauses."}
+
+Create a formal UN-style resolution that:
+1. Addresses {topic} from {country}'s perspective
+2. Uses proper preambulatory clauses that reference existing UN actions
+3. Includes specific, actionable operative clauses
+4. Follows proper resolution formatting and numbering
+5. Is realistic and aligned with {country}'s actual foreign policy
+6. Uses formal diplomatic language throughout
+
+Begin preambulatory clauses with phrases like "Recalling," "Noting," etc.
+Begin operative clauses with action verbs like "Requests," "Decides," etc.
+Format with proper indentation and numbering following UN standards."""
+
+            else:  # speech
+                system_prompt = f"""You are an expert Model UN advisor helping create a formal speech.
+
+WRITING STYLE GUIDELINES:
+{writing_style_guidelines}
+
+FORMATTING GUIDELINES:
+{formatting_guidelines if formatting_guidelines else "Create a speech suitable for 3-4 minute delivery (approximately 500-700 words)."}
+
+Create a well-structured, engaging speech that:
+1. Begins with appropriate committee greeting
+2. Clearly states {country}'s position on {topic}
+3. Provides 2-3 key arguments supported by evidence
+4. References recent developments and relevant UN actions
+5. Ends with a call to action and appropriate closing
+6. Uses proper diplomatic language appropriate for {committee}
+7. Is concise and suitable for oral delivery
+
+Format the speech with appropriate paragraph breaks and emphasis on key points."""
+
+            # Prepare mind map content if available
+            mind_map_content = ""
+            if mind_map:
+                try:
+                    # Convert mind map to a structured text format
+                    mind_map_content = f"""
+                    TOPIC ANALYSIS: {mind_map.get('topic', topic)}
+                    
+                    KEY ISSUES:
+                    {', '.join(mind_map.get('key_issues', []))}
+                    
+                    HISTORICAL CONTEXT:
+                    {', '.join(mind_map.get('historical_context', []))}
+                    
+                    POTENTIAL SOLUTIONS:
+                    {', '.join(mind_map.get('potential_solutions', []))}
+                    
+                    RELEVANT COUNTRIES:
+                    {', '.join(mind_map.get('countries_mentioned', []))}
+                    
+                    SUBTOPICS:
+                    """
+                    
+                    for subtopic in mind_map.get('subtopics', []):
+                        mind_map_content += f"\n- {subtopic.get('name', '')}: {', '.join(subtopic.get('key_points', []))}"
+                        
+                except Exception:
+                    mind_map_content = "Topic analysis available but could not be formatted."
+            
+            # Construct the user prompt with all available information
+            user_prompt = f"""Generate a {document_type.replace('_', ' ')} with the following details:
+
+COMMITTEE: {committee}
+COUNTRY: {country}
+TOPIC: {topic}
+
+BACKGROUND GUIDE SUMMARY:
+{background_guide_text[:2000] if background_guide_text else "No background guide provided."}
+
+TOPIC ANALYSIS:
+{mind_map_content if mind_map_content else "No detailed topic analysis available."}
+
+WEB SEARCH INFORMATION:
+{search_results_combined}
+
+ADDITIONAL CONTEXT:
+{additional_context}
+
+Create a complete, ready-to-use document that represents {country}'s actual positions and follows proper formatting."""
+
+            # Make the document generation API call
+            response = openai.chat.completions.create(
+                model="gpt-4o-mini",  # Use a more capable model for final document
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.7,
+                max_tokens=2500  # Allow for longer output
+            )
+            
+            # Extract the generated text
+            generated_text = response.choices[0].message.content
+            
+            # Add wrapper div for styling
+            html_content = f"<div class='{document_type.replace('_', '-')}'>{generated_text}</div>"
+            
+            # Create a proper title
+            if document_type == 'position_paper':
+                title = f"Position Paper: {country} on {topic}"
+            elif document_type == 'resolution':
+                title = f"Resolution: {topic} ({country})"
+            else:  # speech
+                title = f"Speech: {country} on {topic}"
+            
+            # Create document in database
+            document_data = {
+                "title": title,
+                "type": document_type.replace('_', ' ').title(),
+                "committee": committee,
+                "conference": "Generated from session",
+                "content": html_content,
+                "source_urls": search_queries,  # Store the search queries used
+                "background_guide_text": background_guide_text[:5000] if background_guide_text else None,
+                "progress": 100,
+                "created_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat()
+            }
+            
+            document_response = db.create_document(user_id, document_data)
+            
+            # Update the session
+            db.update_document_creation_session(session_id, user_id, {
+                "status": "completed",
+                "session_data": {
+                    "document_id": document_response.data[0]['id'] if document_response.data else None,
+                    "generated_at": datetime.now().isoformat()
+                }
+            })
+            
+            # Update user stats if document created successfully
+            if document_response and document_response.data:
+                try:
+                    stats = db.get_user_stats(user_id).data
+                    if stats:
+                        db.update_user_stats(user_id, {
+                            "documents_count": stats.get("documents_count", 0) + 1
+                        })
+                except Exception as stats_err:
+                    app.logger.error(f"Error updating user stats: {str(stats_err)}")
+            
+            # Return success response
+            return jsonify({
+                "message": "Document generated successfully",
+                "document_id": document_response.data[0]['id'] if document_response.data else None,
+                "title": title,
+                "content": html_content
+            }), 201
+            
+        except Exception as gen_err:
+            app.logger.error(f"Error generating document: {str(gen_err)}")
+            
+            # Update session status to failed
+            db.update_document_creation_session(session_id, user_id, {"status": "failed"})
+            
+            return jsonify({"error": f"Failed to generate document: {str(gen_err)}"}), 400
+        
+    except Exception as e:
+        app.logger.error(f"Error in document generation endpoint: {str(e)}")
+        return jsonify({"error": str(e)}), 400
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True) 

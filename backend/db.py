@@ -71,6 +71,64 @@ def update_user_stats(user_id, stats_data):
     """Update user stats."""
     return supabase.table('user_stats').update(stats_data).eq('user_id', user_id).execute()
 
+# User writing profile operations
+def get_user_writing_profile(user_id):
+    """Get the writing profile for a user."""
+    return supabase.table('user_writing_profiles').select('*').eq('user_id', user_id).single().execute()
+
+def create_user_writing_profile(user_id, profile_data):
+    """Create a writing profile for a user."""
+    profile_data['user_id'] = user_id
+    return supabase.table('user_writing_profiles').insert(profile_data).execute()
+
+def update_user_writing_profile(user_id, profile_data):
+    """Update a user's writing profile."""
+    return supabase.table('user_writing_profiles').update(profile_data).eq('user_id', user_id).execute()
+
+def delete_user_writing_profile(user_id):
+    """Delete a user's writing profile."""
+    return supabase.table('user_writing_profiles').delete().eq('user_id', user_id).execute()
+
+# Document creation session operations
+def get_document_creation_sessions(user_id):
+    """Get all document creation sessions for a user."""
+    return supabase.table('document_creation_sessions').select('*').eq('user_id', user_id).order('created_at', desc=True).execute()
+
+def get_document_creation_session(session_id, user_id):
+    """Get a specific document creation session."""
+    return supabase.table('document_creation_sessions').select('*').eq('id', session_id).eq('user_id', user_id).single().execute()
+
+def create_document_creation_session(user_id, session_data):
+    """Create a new document creation session."""
+    session_data['user_id'] = user_id
+    session_data['status'] = 'in_progress' if 'status' not in session_data else session_data['status']
+    return supabase.table('document_creation_sessions').insert(session_data).execute()
+
+def update_document_creation_session(session_id, user_id, session_data):
+    """Update a document creation session."""
+    return supabase.table('document_creation_sessions').update(session_data).eq('id', session_id).eq('user_id', user_id).execute()
+
+def delete_document_creation_session(session_id, user_id):
+    """Delete a document creation session."""
+    return supabase.table('document_creation_sessions').delete().eq('id', session_id).eq('user_id', user_id).execute()
+
+# Check if user has completed onboarding
+def check_user_onboarding_status(user_id):
+    """Check if a user has completed onboarding."""
+    response = supabase.table('user_stats').select('is_onboarded').eq('user_id', user_id).single().execute()
+    if response.data and 'is_onboarded' in response.data:
+        return response.data['is_onboarded']
+    return False
+
+# Mark user as onboarded
+def complete_user_onboarding(user_id):
+    """Mark a user as having completed onboarding."""
+    from datetime import datetime
+    return supabase.table('user_stats').update({
+        'is_onboarded': True,
+        'onboarding_completed_at': datetime.now().isoformat()
+    }).eq('user_id', user_id).execute()
+
 # Authentication operations
 def sign_up(email, password):
     """Sign up a new user."""

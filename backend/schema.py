@@ -115,6 +115,70 @@ def create_user_stats_table():
             conferences_count INTEGER NOT NULL DEFAULT 0,
             documents_count INTEGER NOT NULL DEFAULT 0,
             awards_count INTEGER NOT NULL DEFAULT 0,
+            preferred_topics TEXT[],
+            preferred_countries TEXT[],
+            is_onboarded BOOLEAN DEFAULT FALSE,
+            onboarding_completed_at TIMESTAMP WITH TIME ZONE,
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+        """
+        # Execute raw SQL using the REST API
+        supabase.rpc('exec_sql', {'query': sql}).execute()
+
+def create_user_writing_profiles_table():
+    """Create the user_writing_profiles table to store writing style preferences"""
+    try:
+        # Check if table exists
+        response = supabase.table("user_writing_profiles").select("*", count="exact").limit(1).execute()
+        print("User writing profiles table already exists.")
+    except Exception:
+        print("Creating user_writing_profiles table...")
+        # SQL for creating the user_writing_profiles table
+        sql = """
+        CREATE TABLE public.user_writing_profiles (
+            id SERIAL PRIMARY KEY,
+            user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+            writing_style TEXT,
+            tone TEXT,
+            sentence_structure TEXT,
+            complexity_level TEXT CHECK (complexity_level IN ('basic', 'intermediate', 'advanced')),
+            formality_level TEXT CHECK (formality_level IN ('casual', 'neutral', 'formal', 'very formal')),
+            creativity_level TEXT CHECK (creativity_level IN ('factual', 'balanced', 'creative')),
+            sample_document_content TEXT,
+            parsed_style_data JSONB,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            UNIQUE(user_id)
+        );
+        """
+        # Execute raw SQL using the REST API
+        supabase.rpc('exec_sql', {'query': sql}).execute()
+
+def create_document_creation_sessions_table():
+    """Create the document_creation_sessions table to store document creation progress"""
+    try:
+        # Check if table exists
+        response = supabase.table("document_creation_sessions").select("*", count="exact").limit(1).execute()
+        print("Document creation sessions table already exists.")
+    except Exception:
+        print("Creating document_creation_sessions table...")
+        # SQL for creating the document_creation_sessions table
+        sql = """
+        CREATE TABLE public.document_creation_sessions (
+            id SERIAL PRIMARY KEY,
+            user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+            document_type TEXT NOT NULL CHECK (document_type IN ('position_paper', 'resolution', 'speech')),
+            committee TEXT,
+            country TEXT,
+            topic TEXT,
+            background_guide_text TEXT,
+            extracted_formatting TEXT,
+            reference_materials JSONB DEFAULT '[]',
+            additional_context TEXT,
+            session_data JSONB DEFAULT '{}',
+            mind_map JSONB,
+            status TEXT NOT NULL CHECK (status IN ('in_progress', 'ready_for_generation', 'generating', 'completed', 'failed')),
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
             updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
         """
@@ -218,6 +282,60 @@ def create_user_stats_policies():
         {
             "name": "Users can update their own stats",
             "definition": "CREATE POLICY \"Users can update their own stats\" ON public.user_stats FOR UPDATE USING (auth.uid() = user_id);"
+        }
+    ]
+    
+    for policy in policies:
+        try:
+            # Execute raw SQL using the REST API
+            supabase.rpc('exec_sql', {'query': policy["definition"]}).execute()
+            print(f"Created policy: {policy['name']}")
+        except Exception as e:
+            print(f"Error creating policy {policy['name']}: {str(e)}")
+
+def create_user_writing_profiles_policies():
+    """Create policies for user_writing_profiles table"""
+    policies = [
+        {
+            "name": "Users can view their own writing profiles",
+            "definition": "CREATE POLICY \"Users can view their own writing profiles\" ON public.user_writing_profiles FOR SELECT USING (auth.uid() = user_id);"
+        },
+        {
+            "name": "Users can update their own writing profiles",
+            "definition": "CREATE POLICY \"Users can update their own writing profiles\" ON public.user_writing_profiles FOR UPDATE USING (auth.uid() = user_id);"
+        },
+        {
+            "name": "Users can insert their own writing profiles",
+            "definition": "CREATE POLICY \"Users can insert their own writing profiles\" ON public.user_writing_profiles FOR INSERT WITH CHECK (auth.uid() = user_id);"
+        }
+    ]
+    
+    for policy in policies:
+        try:
+            # Execute raw SQL using the REST API
+            supabase.rpc('exec_sql', {'query': policy["definition"]}).execute()
+            print(f"Created policy: {policy['name']}")
+        except Exception as e:
+            print(f"Error creating policy {policy['name']}: {str(e)}")
+
+def create_document_creation_sessions_policies():
+    """Create policies for document_creation_sessions table"""
+    policies = [
+        {
+            "name": "Users can view their own document creation sessions",
+            "definition": "CREATE POLICY \"Users can view their own document creation sessions\" ON public.document_creation_sessions FOR SELECT USING (auth.uid() = user_id);"
+        },
+        {
+            "name": "Users can update their own document creation sessions",
+            "definition": "CREATE POLICY \"Users can update their own document creation sessions\" ON public.document_creation_sessions FOR UPDATE USING (auth.uid() = user_id);"
+        },
+        {
+            "name": "Users can insert their own document creation sessions",
+            "definition": "CREATE POLICY \"Users can insert their own document creation sessions\" ON public.document_creation_sessions FOR INSERT WITH CHECK (auth.uid() = user_id);"
+        },
+        {
+            "name": "Users can delete their own document creation sessions",
+            "definition": "CREATE POLICY \"Users can delete their own document creation sessions\" ON public.document_creation_sessions FOR DELETE USING (auth.uid() = user_id);"
         }
     ]
     
