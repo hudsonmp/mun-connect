@@ -551,73 +551,128 @@ def generate_document():
         
         # Generate document based on type
         try:
-            # Prepare the prompt based on document type
+            # Prepare the system prompt based on document type
             if document_type == 'position_paper':
-                system_prompt = """You are an expert Model UN advisor helping a high school student create a position paper. 
-                Create a formal, well-researched position paper following standard Model UN format. 
-                The paper should be 2-3 pages (about 1000-1500 words) and include:
-                
-                1. A header with committee name, country, and topic
-                2. An introduction that states the country's position on the topic
-                3. A body that outlines 2-3 specific policy proposals with supporting evidence
-                4. A conclusion summarizing the country's stance and proposed solutions
-                
-                Use formal diplomatic language appropriate for Model UN. Include specific policies and actions 
-                that align with the country's actual foreign policy and national interests. If background 
-                information is provided, incorporate relevant details from it.
-                
-                Format the document with proper HTML tags for headings, paragraphs, and lists."""
-                
-                title = f"Position Paper: {country} on {topic}"
-                
+                system_prompt = f"""You are an expert Model UN advisor helping create a position paper.
+
+{delegate_profile}
+
+WRITING STYLE GUIDELINES:
+{writing_style_guidelines}
+
+FORMATTING GUIDELINES:
+{formatting_guidelines if formatting_guidelines else "Follow standard Model UN position paper format."}
+
+Create a formal, well-researched position paper that:
+1. States {country}'s position on {topic}
+2. References information from the background guide AND recent developments
+3. Includes specific policy proposals aligned with {country}'s actual foreign policy
+4. Uses proper citations for factual claims
+5. Is structured with clear introduction, body, and conclusion
+6. Is approximately 1000-1500 words
+
+Use formal diplomatic language. Incorporate relevant details from the background guide and web research.
+Format the document with proper HTML tags for headings, paragraphs, and lists."""
+            
             elif document_type == 'resolution':
-                system_prompt = """You are an expert Model UN advisor helping a high school student create a resolution paper.
-                Create a formal UN-style resolution following proper formatting standards. Include:
-                
-                1. A header with the committee and topic
-                2. Preambulatory clauses that describe the background and context
-                3. Operative clauses that outline specific actions and solutions
-                
-                Use formal language with appropriate clause beginnings (e.g., "Recalling," "Deeply concerned," for preambulatory; 
-                "Requests," "Decides," for operative). Number all operative clauses and use proper indentation.
-                If background information is provided, incorporate relevant details.
-                
-                Format the resolution with proper HTML tags to maintain the standard UN resolution format."""
-                
-                title = f"Resolution: {topic} ({country})"
-                
+                system_prompt = f"""You are an expert Model UN advisor helping create a resolution paper.
+
+{delegate_profile}
+
+WRITING STYLE GUIDELINES:
+{writing_style_guidelines}
+
+FORMATTING GUIDELINES:
+{formatting_guidelines if formatting_guidelines else "Follow standard Model UN resolution format with preambulatory and operative clauses."}
+
+Create a formal UN-style resolution that:
+1. Addresses {topic} from {country}'s perspective
+2. Uses proper preambulatory clauses that reference existing UN actions
+3. Includes specific, actionable operative clauses
+4. Follows proper resolution formatting and numbering
+5. Is realistic and aligned with {country}'s actual foreign policy
+6. Uses formal diplomatic language throughout
+
+Begin preambulatory clauses with phrases like "Recalling," "Noting," etc.
+Begin operative clauses with action verbs like "Requests," "Decides," etc.
+Format with proper indentation and numbering following UN standards."""
+            
             else:  # speech
-                system_prompt = """You are an expert Model UN advisor helping a high school student create a formal speech.
-                Create a well-structured, engaging speech suitable for delivery in a Model UN committee. The speech should:
-                
-                1. Begin with appropriate committee greeting
-                2. Clearly state the country's position on the topic
-                3. Provide 2-3 key arguments supported by evidence
-                4. End with a call to action and appropriate closing
-                
-                Keep the speech concise (approximately 500-700 words for a 3-4 minute delivery).
-                Use diplomatic language appropriate for Model UN. If background information is provided,
-                incorporate relevant details that support the country's position.
-                
-                Format the speech with proper HTML tags for paragraphs and emphasize key points."""
-                
-                title = f"Speech: {country} on {topic}"
+                system_prompt = f"""You are an expert Model UN advisor helping create a formal speech.
+
+{delegate_profile}
+
+WRITING STYLE GUIDELINES:
+{writing_style_guidelines}
+
+FORMATTING GUIDELINES:
+{formatting_guidelines if formatting_guidelines else "Create a speech suitable for 3-4 minute delivery (approximately 500-700 words)."}
+
+Create a well-structured, engaging speech that:
+1. Begins with appropriate committee greeting
+2. Clearly states {country}'s position on {topic}
+3. Provides 2-3 key arguments supported by evidence
+4. References recent developments and relevant UN actions
+5. Ends with a call to action and appropriate closing
+6. Uses proper diplomatic language appropriate for {committee}
+7. Is concise and suitable for oral delivery
+
+Format the speech with appropriate paragraph breaks and emphasis on key points."""
             
             # Combine reference materials if any
             background_text = "\n\n".join(reference_texts) if reference_texts else ""
             if background_text and len(background_text) > 6000:
                 background_text = background_text[:6000] + "... [text truncated for length]"
             
-            # Construct the user prompt
-            user_prompt = f"Committee: {committee}\nCountry: {country}\nTopic: {topic}\n"
+            # Prepare mind map content if available
+            mind_map_content = ""
+            if mind_map:
+                try:
+                    # Convert mind map to a structured text format
+                    mind_map_content = f"""
+                    TOPIC ANALYSIS: {mind_map.get('topic', topic)}
+                    
+                    KEY ISSUES:
+                    {', '.join(mind_map.get('key_issues', []))}
+                    
+                    HISTORICAL CONTEXT:
+                    {', '.join(mind_map.get('historical_context', []))}
+                    
+                    POTENTIAL SOLUTIONS:
+                    {', '.join(mind_map.get('potential_solutions', []))}
+                    
+                    RELEVANT COUNTRIES:
+                    {', '.join(mind_map.get('countries_mentioned', []))}
+                    
+                    SUBTOPICS:
+                    """
+                    
+                    for subtopic in mind_map.get('subtopics', []):
+                        mind_map_content += f"\n- {subtopic.get('name', '')}: {', '.join(subtopic.get('key_points', []))}"
+                        
+                except Exception:
+                    mind_map_content = "Topic analysis available but could not be formatted."
             
-            if background_text:
-                user_prompt += f"\nBackground Information:\n{background_text}\n"
-            
-            if additional_context:
-                user_prompt += f"\nAdditional Context:\n{additional_context}\n"
-                
-            user_prompt += f"\nPlease generate a complete {document_type.replace('_', ' ')} in HTML format."
+            # Construct the user prompt with all available information
+            user_prompt = f"""Generate a {document_type.replace('_', ' ')} with the following details:
+
+COMMITTEE: {committee}
+COUNTRY: {country}
+TOPIC: {topic}
+
+BACKGROUND GUIDE SUMMARY:
+{background_guide_text[:2000] if background_guide_text else "No background guide provided."}
+
+TOPIC ANALYSIS:
+{mind_map_content if mind_map_content else "No detailed topic analysis available."}
+
+WEB SEARCH INFORMATION:
+{search_results_combined}
+
+ADDITIONAL CONTEXT:
+{additional_context}
+
+Create a complete, ready-to-use document that represents {country}'s actual positions and follows proper formatting."""
             
             # Make API call with timeout and error handling
             try:
@@ -889,9 +944,28 @@ def create_writing_profile():
         writing_samples = data.get('writing_samples', '')
         preferred_topics = data.get('preferred_topics', [])
         preferred_countries = data.get('preferred_countries', [])
+        delegate_style = data.get('delegate_style', '')
+        past_papers = data.get('past_papers', '')
+        past_speeches = data.get('past_speeches', '')
+        past_resolutions = data.get('past_resolutions', '')
+        
+        # Combine all text for analysis if available
+        all_text_samples = []
+        if writing_samples:
+            all_text_samples.append(writing_samples)
+        if delegate_style:
+            all_text_samples.append(delegate_style)
+        if past_papers:
+            all_text_samples.append(past_papers)
+        if past_speeches:
+            all_text_samples.append(past_speeches)
+        if past_resolutions:
+            all_text_samples.append(past_resolutions)
+            
+        combined_text = "\n\n".join(all_text_samples)
         
         # Don't process if samples are too short
-        if len(writing_samples) < 50:
+        if len(combined_text) < 50:
             # Store minimal profile without AI processing
             profile_data = {
                 "writing_style": "default",
@@ -900,8 +974,13 @@ def create_writing_profile():
                 "complexity_level": "intermediate",
                 "formality_level": "formal",
                 "creativity_level": "balanced",
-                "sample_document_content": writing_samples[:100] if writing_samples else "",  # Store just a brief sample
-                "parsed_style_data": {}
+                "delegate_style": delegate_style,
+                "research_depth": "moderate",
+                "argument_structure": "standard",
+                "sample_document_content": writing_samples[:100] if writing_samples else "",
+                "parsed_style_data": {},
+                "delegate_profile_created": False,
+                "consolidated_delegate_profile": ""
             }
             
             db.create_user_writing_profile(user_id, profile_data)
@@ -927,13 +1006,16 @@ def create_writing_profile():
             - complexity_level: one of [basic, intermediate, advanced]
             - formality_level: one of [casual, neutral, formal, very formal]
             - creativity_level: one of [factual, balanced, creative]
+            - research_depth: one of [minimal, moderate, thorough, extensive]
+            - argument_structure: description of how arguments are typically structured
             - key_patterns: array of notable writing patterns
+            - delegate_style_analysis: analysis of the delegate's approach in MUN contexts
             
             Ensure the analysis is objective and focuses on STYLE, not content."""
             
             user_prompt = f"""Analyze the following writing sample(s) for stylistic elements only:
 
-{writing_samples}
+{combined_text}
 
 Remember to return ONLY a JSON object with the specified fields."""
             
@@ -944,7 +1026,7 @@ Remember to return ONLY a JSON object with the specified fields."""
                     {"role": "user", "content": user_prompt}
                 ],
                 temperature=0.3,
-                max_tokens=500,
+                max_tokens=600,
                 response_format={"type": "json_object"}
             )
             
@@ -967,8 +1049,53 @@ Remember to return ONLY a JSON object with the specified fields."""
                     "complexity_level": "intermediate",
                     "formality_level": "formal", 
                     "creativity_level": "balanced",
-                    "key_patterns": []
+                    "research_depth": "moderate",
+                    "argument_structure": "standard",
+                    "key_patterns": [],
+                    "delegate_style_analysis": "Formal diplomatic approach"
                 }
+            
+            # Flag to check if we should create a consolidated profile
+            create_consolidated_profile = len(combined_text) >= 200
+            consolidated_profile = ""
+            
+            # Only create the consolidated profile if we have enough text
+            if create_consolidated_profile:
+                try:
+                    consolidation_prompt = f"""Create a concise but comprehensive profile of this Model UN delegate based on the analyzed writing samples.
+                    The profile should capture their writing style, delegate approach, and key characteristics in a structured format that can
+                    be used as a reference for generating personalized documents.
+                    
+                    Data points to consider:
+                    - Writing style: {analysis.get("writing_style", "formal")}
+                    - Tone: {analysis.get("tone", "formal diplomatic")}
+                    - Sentence structure: {analysis.get("sentence_structure", "balanced")}
+                    - Complexity level: {analysis.get("complexity_level", "intermediate")}
+                    - Formality level: {analysis.get("formality_level", "formal")}
+                    - Creativity level: {analysis.get("creativity_level", "balanced")}
+                    - Research depth: {analysis.get("research_depth", "moderate")}
+                    - Argument structure: {analysis.get("argument_structure", "standard")}
+                    - Delegate style: {delegate_style}
+                    - Preferred topics: {", ".join(preferred_topics) if preferred_topics else "None specified"}
+                    - Preferred countries: {", ".join(preferred_countries) if preferred_countries else "None specified"}
+                    
+                    Format this as a comprehensive profile that captures their essence as a delegate in about 300-500 words.
+                    The profile should be structured to be easily referenced when generating documents."""
+                    
+                    profile_response = openai.chat.completions.create(
+                        model="gpt-3.5-turbo",
+                        messages=[
+                            {"role": "system", "content": "You are a specialized Model UN coach who creates delegate profiles."},
+                            {"role": "user", "content": consolidation_prompt}
+                        ],
+                        temperature=0.3,
+                        max_tokens=800
+                    )
+                    
+                    consolidated_profile = profile_response.choices[0].message.content
+                except Exception as profile_err:
+                    app.logger.error(f"Error creating consolidated profile: {str(profile_err)}")
+                    consolidated_profile = "Error creating consolidated profile."
             
             # Store the writing profile
             profile_data = {
@@ -978,8 +1105,13 @@ Remember to return ONLY a JSON object with the specified fields."""
                 "complexity_level": analysis.get("complexity_level", "intermediate"),
                 "formality_level": analysis.get("formality_level", "formal"),
                 "creativity_level": analysis.get("creativity_level", "balanced"),
-                "sample_document_content": writing_samples[:500],  # Store a sample, limited to 500 chars
-                "parsed_style_data": analysis
+                "research_depth": analysis.get("research_depth", "moderate"),
+                "argument_structure": analysis.get("argument_structure", "standard"),
+                "delegate_style": delegate_style,
+                "sample_document_content": combined_text[:1000],  # Store a sample, limited to 1000 chars
+                "parsed_style_data": analysis,
+                "delegate_profile_created": create_consolidated_profile,
+                "consolidated_delegate_profile": consolidated_profile
             }
             
             db.create_user_writing_profile(user_id, profile_data)
@@ -1005,10 +1137,15 @@ Remember to return ONLY a JSON object with the specified fields."""
                 "complexity_level": "intermediate",
                 "formality_level": "formal",
                 "creativity_level": "balanced",
-                "sample_document_content": writing_samples[:100] if writing_samples else "",
+                "research_depth": "moderate",
+                "argument_structure": "standard",
+                "delegate_style": delegate_style,
+                "sample_document_content": combined_text[:200] if combined_text else "",
                 "parsed_style_data": {
                     "error": "AI analysis failed, using default values"
-                }
+                },
+                "delegate_profile_created": False,
+                "consolidated_delegate_profile": ""
             }
             
             db.create_user_writing_profile(user_id, profile_data)
@@ -1418,10 +1555,20 @@ def generate_document_from_session(session_id):
             calling for increased cooperation among member states.
             """
             
-            # Prepare writing style guidelines based on user profile
+            # Get additional data like delegate profile if available
+            delegate_profile = ""
             writing_style_guidelines = "Use formal diplomatic language appropriate for Model UN."
             
             if writing_profile:
+                # Check if we have a consolidated delegate profile
+                if writing_profile.get('delegate_profile_created', False) and writing_profile.get('consolidated_delegate_profile'):
+                    app.logger.info(f"Using consolidated delegate profile for user {user_id}")
+                    delegate_profile = f"""
+                    DELEGATE PROFILE:
+                    {writing_profile.get('consolidated_delegate_profile')}
+                    """
+                
+                # Create writing style guidelines from individual components
                 writing_style_guidelines = f"""
                 Writing style: {writing_profile.get('writing_style', 'formal')}
                 Tone: {writing_profile.get('tone', 'formal diplomatic')}
@@ -1429,70 +1576,10 @@ def generate_document_from_session(session_id):
                 Complexity level: {writing_profile.get('complexity_level', 'intermediate')}
                 Formality level: {writing_profile.get('formality_level', 'formal')}
                 Creativity level: {writing_profile.get('creativity_level', 'balanced')}
+                Research depth: {writing_profile.get('research_depth', 'moderate')}
+                Argument structure: {writing_profile.get('argument_structure', 'standard')}
                 """
             
-            # Prepare the system prompt based on document type
-            if document_type == 'position_paper':
-                system_prompt = f"""You are an expert Model UN advisor helping create a position paper.
-
-WRITING STYLE GUIDELINES:
-{writing_style_guidelines}
-
-FORMATTING GUIDELINES:
-{formatting_guidelines if formatting_guidelines else "Follow standard Model UN position paper format."}
-
-Create a formal, well-researched position paper that:
-1. States {country}'s position on {topic}
-2. References information from the background guide AND recent developments
-3. Includes specific policy proposals aligned with {country}'s actual foreign policy
-4. Uses proper citations for factual claims
-5. Is structured with clear introduction, body, and conclusion
-6. Is approximately 1000-1500 words
-
-Use formal diplomatic language. Incorporate relevant details from the background guide and web research.
-Format the document with proper HTML tags for headings, paragraphs, and lists."""
-
-            elif document_type == 'resolution':
-                system_prompt = f"""You are an expert Model UN advisor helping create a resolution paper.
-
-WRITING STYLE GUIDELINES:
-{writing_style_guidelines}
-
-FORMATTING GUIDELINES:
-{formatting_guidelines if formatting_guidelines else "Follow standard Model UN resolution format with preambulatory and operative clauses."}
-
-Create a formal UN-style resolution that:
-1. Addresses {topic} from {country}'s perspective
-2. Uses proper preambulatory clauses that reference existing UN actions
-3. Includes specific, actionable operative clauses
-4. Follows proper resolution formatting and numbering
-5. Is realistic and aligned with {country}'s actual foreign policy
-6. Uses formal diplomatic language throughout
-
-Begin preambulatory clauses with phrases like "Recalling," "Noting," etc.
-Begin operative clauses with action verbs like "Requests," "Decides," etc.
-Format with proper indentation and numbering following UN standards."""
-
-            else:  # speech
-                system_prompt = f"""You are an expert Model UN advisor helping create a formal speech.
-
-WRITING STYLE GUIDELINES:
-{writing_style_guidelines}
-
-FORMATTING GUIDELINES:
-{formatting_guidelines if formatting_guidelines else "Create a speech suitable for 3-4 minute delivery (approximately 500-700 words)."}
-
-Create a well-structured, engaging speech that:
-1. Begins with appropriate committee greeting
-2. Clearly states {country}'s position on {topic}
-3. Provides 2-3 key arguments supported by evidence
-4. References recent developments and relevant UN actions
-5. Ends with a call to action and appropriate closing
-6. Uses proper diplomatic language appropriate for {committee}
-7. Is concise and suitable for oral delivery
-
-Format the speech with appropriate paragraph breaks and emphasis on key points."""
-
             # Prepare mind map content if available
             mind_map_content = ""
             if mind_map:
@@ -1542,7 +1629,7 @@ ADDITIONAL CONTEXT:
 {additional_context}
 
 Create a complete, ready-to-use document that represents {country}'s actual positions and follows proper formatting."""
-
+            
             # Make the document generation API call
             response = openai.chat.completions.create(
                 model="gpt-4o-mini",  # Use a more capable model for final document
@@ -1614,12 +1701,10 @@ Create a complete, ready-to-use document that represents {country}'s actual posi
             
         except Exception as gen_err:
             app.logger.error(f"Error generating document: {str(gen_err)}")
-            
             # Update session status to failed
             db.update_document_creation_session(session_id, user_id, {"status": "failed"})
+            return jsonify({"error": f"Document generation failed: {str(gen_err)}"}), 500
             
-            return jsonify({"error": f"Failed to generate document: {str(gen_err)}"}), 400
-        
     except Exception as e:
         app.logger.error(f"Error in document generation endpoint: {str(e)}")
         return jsonify({"error": str(e)}), 400

@@ -1,42 +1,46 @@
 "use client"
 
-import React, { useState, useRef, useCallback } from 'react'
+import React, { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { motion } from 'framer-motion'
+import { useDropzone, FileRejection } from 'react-dropzone'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Stepper, Step, StepLabel, StepContent } from '@/components/ui/stepper'
 import { useToast } from '@/components/ui/use-toast'
-import { Loader2, Upload, FileUp, ChevronRight, ChevronLeft, CheckCircle } from 'lucide-react'
-import { useDropzone } from 'react-dropzone'
-import { 
-  Stepper,
-  Step,
-  StepLabel,
-  StepContent,
-  StepConnector,
-} from '@/components/ui/stepper'
+import { ChevronLeft, ChevronRight, FileUp, Loader2, CheckCircle, X } from 'lucide-react'
 import countries from '@/lib/countries'
 import { Badge } from '@/components/ui/badge'
-import { Checkbox } from '@/components/ui/checkbox'
 
+// Sample data for UI
 const popularTopics = [
-  "Climate Change", "Refugee Crisis", "Nuclear Disarmament", "Global Health",
-  "Human Rights", "Economic Development", "Food Security", "Cybersecurity",
-  "Terrorism", "Peace and Security", "Women's Rights", "Children's Rights",
-  "Water Security", "Technology Access", "Education", "Poverty Reduction"
+  'Climate Change',
+  'Human Rights',
+  'Nuclear Disarmament',
+  'Sustainable Development',
+  'Refugees',
+  'Cybersecurity',
+  'Terrorism',
+  'COVID-19 Response',
+  'Economic Inequality',
+  'Gender Equality'
 ]
 
+// Helper function to parse topics from text
 const parseTopicsFromText = (text: string): string[] => {
   if (!text.trim()) return []
-  
-  return text
-    .split(',')
-    .map(topic => topic.trim())
-    .filter(topic => topic.length > 0)
+  return text.split(',').map(topic => topic.trim()).filter(Boolean)
 }
 
 export interface OnboardingFlowProps {
@@ -53,11 +57,39 @@ export function OnboardingFlow({ userId, onComplete }: OnboardingFlowProps) {
     customTopics: '',
     preferredCountries: [] as string[],
     uploadedDocuments: [] as File[],
+    delegateStyle: '',
+    pastPapers: '',
+    pastSpeeches: '',
+    pastResolutions: ''
   })
   
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
   const router = useRouter()
+  
+  // Dropzone setup
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    accept: {
+      'application/pdf': ['.pdf'],
+      'application/msword': ['.doc'],
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+      'text/plain': ['.txt']
+    },
+    maxSize: 5 * 1024 * 1024, // 5MB
+    onDrop: (acceptedFiles: File[]) => {
+      setFormData(prev => ({
+        ...prev,
+        uploadedDocuments: [...prev.uploadedDocuments, ...acceptedFiles]
+      }))
+    },
+    onDropRejected: (rejectedFiles: FileRejection[]) => {
+      toast({
+        title: "File upload failed",
+        description: "Please ensure files are under 5MB and in a supported format (PDF, DOC, DOCX, TXT).",
+        variant: "destructive",
+      })
+    }
+  })
   
   const handleNext = () => {
     if (activeStep === 0 && formData.writingSample.length < 50 && formData.uploadedDocuments.length === 0) {
@@ -112,87 +144,33 @@ export function OnboardingFlow({ userId, onComplete }: OnboardingFlowProps) {
     }))
   }
   
-  const handleCountrySelect = (country: string) => {
-    setFormData(prev => {
-      const isSelected = prev.preferredCountries.includes(country)
-      if (isSelected) {
-        return {
-          ...prev,
-          preferredCountries: prev.preferredCountries.filter(c => c !== country)
-        }
-      } else {
-        // Limit to 5 countries
-        if (prev.preferredCountries.length >= 5) {
-          toast({
-            title: "Maximum countries reached",
-            description: "You can select up to 5 countries. Remove one before adding another.",
-          })
-          return prev
-        }
-        return {
-          ...prev,
-          preferredCountries: [...prev.preferredCountries, country]
-        }
-      }
-    })
-  }
-  
-  const handleFileUpload = useCallback((acceptedFiles: File[]) => {
-    // Validate file types (allow only document formats)
-    const validFiles = acceptedFiles.filter(file => 
-      file.type === 'application/pdf' ||
-      file.type === 'application/msword' ||
-      file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-      file.type === 'text/plain'
-    )
-    
-    if (validFiles.length !== acceptedFiles.length) {
+  const handleCountrySelect = (value: string) => {
+    if (formData.preferredCountries.length >= 5) {
       toast({
-        title: "Invalid file type",
-        description: "Only PDF, DOC, DOCX, and TXT files are allowed.",
+        title: "Maximum countries reached",
+        description: "You can select up to 5 countries. Remove one to add another.",
         variant: "destructive",
       })
+      return
     }
     
-    // Check file sizes (max 5MB)
-    const validSizeFiles = validFiles.filter(file => file.size <= 5 * 1024 * 1024)
-    
-    if (validSizeFiles.length !== validFiles.length) {
-      toast({
-        title: "File too large",
-        description: "Maximum file size is 5MB.",
-        variant: "destructive",
-      })
-    }
-    
-    if (validSizeFiles.length > 0) {
-      setFormData(prev => ({
-        ...prev,
-        uploadedDocuments: [...prev.uploadedDocuments, ...validSizeFiles]
-      }))
-      
-      toast({
-        title: "Files uploaded",
-        description: `${validSizeFiles.length} file(s) successfully uploaded.`,
-      })
-    }
-  }, [toast])
-  
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop: handleFileUpload,
-    accept: {
-      'application/pdf': ['.pdf'],
-      'application/msword': ['.doc'],
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
-      'text/plain': ['.txt'],
-    },
-    maxFiles: 3,
-  })
-  
-  const removeFile = (index: number) => {
     setFormData(prev => ({
       ...prev,
-      uploadedDocuments: prev.uploadedDocuments.filter((_, i) => i !== index)
+      preferredCountries: [...prev.preferredCountries, value]
+    }))
+  }
+  
+  const handleRemoveCountry = (country: string) => {
+    setFormData(prev => ({
+      ...prev,
+      preferredCountries: prev.preferredCountries.filter(c => c !== country)
+    }))
+  }
+  
+  const handleRemoveFile = (fileToRemove: File) => {
+    setFormData(prev => ({
+      ...prev,
+      uploadedDocuments: prev.uploadedDocuments.filter(file => file !== fileToRemove)
     }))
   }
   
@@ -205,6 +183,10 @@ export function OnboardingFlow({ userId, onComplete }: OnboardingFlowProps) {
         writing_samples: formData.writingSample,
         preferred_topics: formData.preferredTopics,
         preferred_countries: formData.preferredCountries,
+        delegate_style: formData.delegateStyle,
+        past_papers: formData.pastPapers,
+        past_speeches: formData.pastSpeeches,
+        past_resolutions: formData.pastResolutions
       }
       
       const profileResponse = await fetch('/api/onboarding/writing-profile', {
@@ -310,26 +292,106 @@ export function OnboardingFlow({ userId, onComplete }: OnboardingFlowProps) {
                     
                     {formData.uploadedDocuments.length > 0 && (
                       <div className="mt-4 space-y-2">
-                        <Label>Uploaded documents</Label>
+                        <Label>Uploaded files</Label>
                         <div className="space-y-2">
                           {formData.uploadedDocuments.map((file, index) => (
-                            <div key={index} className="flex items-center justify-between p-2 bg-muted rounded-md">
-                              <div className="flex items-center space-x-2">
-                                <Upload className="h-4 w-4 text-muted-foreground" />
-                                <span className="text-sm truncate max-w-[250px]">{file.name}</span>
-                              </div>
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                onClick={() => removeFile(index)}
+                            <div 
+                              key={index} 
+                              className="flex items-center justify-between p-2 bg-muted rounded"
+                            >
+                              <span className="text-sm truncate max-w-[80%]">{file.name}</span>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleRemoveFile(file)}
                               >
-                                Remove
+                                <X className="h-4 w-4" />
                               </Button>
                             </div>
                           ))}
                         </div>
                       </div>
                     )}
+                  </div>
+                  
+                  <div className="flex justify-end">
+                    <Button onClick={handleNext}>
+                      Next
+                      <ChevronRight className="ml-1 h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </StepContent>
+            </Step>
+            
+            <Step>
+              <StepLabel>Your Delegate Profile</StepLabel>
+              <StepContent>
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    Tell us about your delegate style and experience. This helps us tailor content to match your approach.
+                  </p>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="delegateStyle">Describe your delegate style</Label>
+                    <Textarea
+                      id="delegateStyle"
+                      name="delegateStyle"
+                      value={formData.delegateStyle}
+                      onChange={handleInputChange}
+                      placeholder="Describe your approach as a delegate. Are you consensus-building, assertive, detail-oriented, etc.?"
+                      className="min-h-[100px]"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="pastPapers">Share excerpts from your past position papers</Label>
+                    <Textarea
+                      id="pastPapers"
+                      name="pastPapers"
+                      value={formData.pastPapers}
+                      onChange={handleInputChange}
+                      placeholder="Paste excerpts from your previous position papers to help us understand your style."
+                      className="min-h-[100px]"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="pastSpeeches">Share examples of speeches you've given</Label>
+                    <Textarea
+                      id="pastSpeeches"
+                      name="pastSpeeches"
+                      onChange={handleInputChange}
+                      value={formData.pastSpeeches}
+                      placeholder="Paste examples of speeches you've delivered in committee sessions."
+                      className="min-h-[100px]"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="pastResolutions">Share examples of resolutions you've worked on</Label>
+                    <Textarea
+                      id="pastResolutions"
+                      name="pastResolutions"
+                      onChange={handleInputChange}
+                      value={formData.pastResolutions}
+                      placeholder="Paste examples of resolution clauses or points you've contributed to committees."
+                      className="min-h-[100px]"
+                    />
+                  </div>
+                  
+                  <div className="flex justify-between">
+                    <Button
+                      variant="outline"
+                      onClick={handleBack}
+                    >
+                      <ChevronLeft className="mr-1 h-4 w-4" />
+                      Back
+                    </Button>
+                    <Button onClick={handleNext}>
+                      Next
+                      <ChevronRight className="ml-1 h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
               </StepContent>
@@ -381,23 +443,19 @@ export function OnboardingFlow({ userId, onComplete }: OnboardingFlowProps) {
                     </div>
                   </div>
                   
-                  {formData.preferredTopics.length > 0 && (
-                    <div className="space-y-2">
-                      <Label>Selected topics</Label>
-                      <div className="flex flex-wrap gap-2">
-                        {formData.preferredTopics.map(topic => (
-                          <Badge 
-                            key={topic} 
-                            variant="secondary"
-                            className="cursor-pointer"
-                            onClick={() => handleTopicToggle(topic)}
-                          >
-                            {topic} &times;
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  <div className="flex justify-between">
+                    <Button
+                      variant="outline"
+                      onClick={handleBack}
+                    >
+                      <ChevronLeft className="mr-1 h-4 w-4" />
+                      Back
+                    </Button>
+                    <Button onClick={handleNext}>
+                      Next
+                      <ChevronRight className="ml-1 h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </StepContent>
             </Step>
@@ -413,7 +471,7 @@ export function OnboardingFlow({ userId, onComplete }: OnboardingFlowProps) {
                   <div className="space-y-2">
                     <Label htmlFor="countrySelect">Select countries (max 5)</Label>
                     <Select onValueChange={handleCountrySelect}>
-                      <SelectTrigger>
+                      <SelectTrigger id="countrySelect">
                         <SelectValue placeholder="Select a country" />
                       </SelectTrigger>
                       <SelectContent className="max-h-[300px]">
@@ -435,115 +493,131 @@ export function OnboardingFlow({ userId, onComplete }: OnboardingFlowProps) {
                       <Label>Selected countries</Label>
                       <div className="flex flex-wrap gap-2">
                         {formData.preferredCountries.map(country => (
-                          <Badge 
-                            key={country} 
-                            variant="secondary"
-                            className="cursor-pointer"
-                            onClick={() => handleCountrySelect(country)}
+                          <div 
+                            key={country}
+                            className="flex items-center space-x-1 bg-primary/10 text-primary rounded-full px-3 py-1"
                           >
-                            {country} &times;
-                          </Badge>
+                            <span className="text-sm">{country}</span>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-5 w-5 p-0 rounded-full"
+                              onClick={() => handleRemoveCountry(country)}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
                         ))}
                       </div>
                     </div>
                   )}
+                  
+                  <div className="flex justify-between">
+                    <Button
+                      variant="outline"
+                      onClick={handleBack}
+                    >
+                      <ChevronLeft className="mr-1 h-4 w-4" />
+                      Back
+                    </Button>
+                    <Button onClick={handleNext}>
+                      Next
+                      <ChevronRight className="ml-1 h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </StepContent>
             </Step>
             
             <Step>
-              <StepLabel>Complete Setup</StepLabel>
+              <StepLabel>Review and Finish</StepLabel>
               <StepContent>
                 <div className="space-y-4">
-                  <div className="rounded-lg border p-4 space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Please review your preferences. Click Finish to complete the onboarding process.
+                  </p>
+                  
+                  <div className="space-y-3 rounded-md border p-4">
                     <div>
                       <h4 className="font-medium">Writing Sample</h4>
                       <p className="text-sm text-muted-foreground">
-                        {formData.writingSample
-                          ? `${formData.writingSample.substring(0, 100)}${formData.writingSample.length > 100 ? '...' : ''}`
-                          : 'No writing sample provided'}
+                        {formData.writingSample 
+                          ? formData.writingSample.length > 100 
+                            ? `${formData.writingSample.substring(0, 100)}...` 
+                            : formData.writingSample
+                          : "No writing sample provided"}
                       </p>
-                      {formData.uploadedDocuments.length > 0 && (
-                        <p className="text-sm mt-1">
-                          + {formData.uploadedDocuments.length} document(s) uploaded
-                        </p>
-                      )}
                     </div>
                     
                     <div>
-                      <h4 className="font-medium">Topics of Interest</h4>
-                      {formData.preferredTopics.length > 0 ? (
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {formData.preferredTopics.map(topic => (
-                            <Badge key={topic} variant="outline" className="text-xs">
-                              {topic}
-                            </Badge>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-muted-foreground">No topics selected</p>
-                      )}
+                      <h4 className="font-medium">Delegate Style</h4>
+                      <p className="text-sm text-muted-foreground">
+                        {formData.delegateStyle 
+                          ? formData.delegateStyle.length > 100 
+                            ? `${formData.delegateStyle.substring(0, 100)}...` 
+                            : formData.delegateStyle
+                          : "No delegate style provided"}
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <h4 className="font-medium">Preferred Topics</h4>
+                      <p className="text-sm text-muted-foreground">
+                        {formData.preferredTopics.length > 0 
+                          ? formData.preferredTopics.join(", ") 
+                          : "No topics selected"}
+                      </p>
                     </div>
                     
                     <div>
                       <h4 className="font-medium">Preferred Countries</h4>
-                      {formData.preferredCountries.length > 0 ? (
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {formData.preferredCountries.map(country => (
-                            <Badge key={country} variant="outline" className="text-xs">
-                              {country}
-                            </Badge>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-muted-foreground">No countries selected</p>
-                      )}
+                      <p className="text-sm text-muted-foreground">
+                        {formData.preferredCountries.length > 0 
+                          ? formData.preferredCountries.join(", ") 
+                          : "No countries selected"}
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <h4 className="font-medium">Uploaded Documents</h4>
+                      <p className="text-sm text-muted-foreground">
+                        {formData.uploadedDocuments.length > 0 
+                          ? formData.uploadedDocuments.map(file => file.name).join(", ") 
+                          : "No documents uploaded"}
+                      </p>
                     </div>
                   </div>
                   
-                  <p className="text-sm">
-                    Review your information above and click Finish to complete setup. You can update these preferences later.
-                  </p>
+                  <div className="flex justify-between">
+                    <Button
+                      variant="outline"
+                      onClick={handleBack}
+                    >
+                      <ChevronLeft className="mr-1 h-4 w-4" />
+                      Back
+                    </Button>
+                    <Button 
+                      onClick={submitOnboarding}
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="mr-2 h-4 w-4" />
+                          Finish
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </StepContent>
             </Step>
           </Stepper>
         </CardContent>
-        
-        <CardFooter className="flex justify-between">
-          <Button
-            variant="outline"
-            onClick={handleBack}
-            disabled={activeStep === 0 || isSubmitting}
-          >
-            <ChevronLeft className="mr-1 h-4 w-4" />
-            Back
-          </Button>
-          
-          {activeStep === 3 ? (
-            <Button 
-              onClick={submitOnboarding}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="mr-2 h-4 w-4" />
-                  Finish
-                </>
-              )}
-            </Button>
-          ) : (
-            <Button onClick={handleNext}>
-              Next
-              <ChevronRight className="ml-1 h-4 w-4" />
-            </Button>
-          )}
-        </CardFooter>
       </Card>
     </div>
   )

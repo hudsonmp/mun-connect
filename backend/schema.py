@@ -144,8 +144,13 @@ def create_user_writing_profiles_table():
             complexity_level TEXT CHECK (complexity_level IN ('basic', 'intermediate', 'advanced')),
             formality_level TEXT CHECK (formality_level IN ('casual', 'neutral', 'formal', 'very formal')),
             creativity_level TEXT CHECK (creativity_level IN ('factual', 'balanced', 'creative')),
+            delegate_style TEXT,
+            research_depth TEXT CHECK (research_depth IN ('minimal', 'moderate', 'thorough', 'extensive')),
+            argument_structure TEXT,
             sample_document_content TEXT,
             parsed_style_data JSONB,
+            consolidated_delegate_profile TEXT,
+            delegate_profile_created BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
             updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
             UNIQUE(user_id)
