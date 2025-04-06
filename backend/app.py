@@ -11,6 +11,14 @@ CORS(app)
 # Initialize OpenAI client
 openai.api_key = os.environ.get("OPENAI_API_KEY")
 
+# Register background guide blueprint
+try:
+    from background_guide.api import bg_blueprint
+    app.register_blueprint(bg_blueprint, url_prefix='/api/background-guide')
+    print("Background guide blueprint registered successfully")
+except ImportError as e:
+    print(f"Could not register background guide blueprint: {e}")
+
 # Authentication routes
 @app.route('/api/auth/signup', methods=['POST'])
 def signup():

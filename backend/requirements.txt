@@ -13,7 +13,17 @@ tiktoken==0.4.0
 # Document parsing
 PyPDF2==3.0.1
 python-docx==0.8.11
+PyMuPDF==1.23.4  # For PDF text extraction
+
+# ML/DL models
+torch==2.0.1
+transformers==4.36.2
+sentence-transformers==2.2.2
+faiss-cpu==1.7.4  # For vector search
+numpy==1.24.3
 
 # Utilities
 requests==2.31.0
-pytz==2023.3 
+pytz==2023.3
+uuid==1.30
+werkzeug==2.3.7 
