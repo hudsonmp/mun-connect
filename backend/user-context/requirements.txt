@@ -1,0 +1,4 @@
+supabase==1.1.1
+python-dotenv==1.0.0
+uuid==1.30
+pathlib==1.0.1 

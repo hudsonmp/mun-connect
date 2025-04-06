@@ -1,0 +1,60 @@
+---
+description: Tech Stack
+globs: 
+---
+
+Frontend
+
+Framework: Next.js with React
+Language: TypeScript
+Styling:
+
+Tailwind CSS
+shadcn/ui component library
+
+
+Features:
+
+Interactive dashboards
+Document management interface
+
+
+
+Backend
+
+API Server: Flask
+Cross-Origin Support: Flask-Cors
+Environment Management: python-dotenv
+Utility Libraries:
+
+requests (HTTP client)
+pytz (timezone handling)
+
+
+
+Database & Authentication
+
+Database: PostgreSQL (managed through Supabase)
+Data Access Layer: Supabase Python library
+Authentication: Supabase Auth
+
+AI Integration
+
+AI Framework: OpenAI
+Token Management: tiktoken
+Features: AI-powered document generation
+
+Application Features
+
+User management and authentication
+Conference management system
+Document management and generation
+User statistics and analytics
+Responsive design with theme support
+
+Architecture
+This is a full-stack application with a clear separation between:
+
+Next.js frontend (React/TypeScript)
+Flask backend API
+Supabase for database and authentication services

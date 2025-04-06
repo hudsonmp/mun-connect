@@ -1,0 +1,19 @@
+# Web framework
+Flask==2.3.3
+Flask-Cors==4.0.0
+
+# Supabase integration
+supabase==1.0.3
+python-dotenv==1.0.0
+
+# AI tools (for document generation features)
+openai==1.8.0
+tiktoken==0.4.0
+
+# Document parsing
+PyPDF2==3.0.1
+python-docx==0.8.11
+
+# Utilities
+requests==2.31.0
+pytz==2023.3 

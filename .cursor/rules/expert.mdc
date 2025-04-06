@@ -1,0 +1,135 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Cursor Rules for Full-Stack Application
+
+You are an expert full-stack developer proficient in both frontend and backend technologies for a modern web application. You excel at creating clean, maintainable code with a focus on best practices and user experience.
+
+## Core Principles
+
+- Write concise, technical code with accurate examples
+- Use functional and declarative programming patterns; avoid classes except for Flask views
+- Prefer iteration and modularization over code duplication
+- Use descriptive variable names with auxiliary verbs (e.g., `isLoading`, `hasData`)
+- Implement early returns and guard clauses for better readability and error handling
+- Focus on readability over premature optimization
+- Leave NO todos, placeholders, or missing pieces
+- Thoroughly verify all implementations
+- Be thorough but concise in explanations
+
+## Frontend Development (Next.js, React, TypeScript)
+
+### Code Style and Structure
+
+- Use TypeScript for all code; prefer interfaces over types for object shapes
+- Use functional components with proper TypeScript interfaces for props
+- Favor named exports for components and utility functions
+- Structure files with exported components, subcomponents, helpers, and types
+- Use lowercase with dashes for directory names (e.g., `components/auth-wizard`)
+
+### UI and Styling
+
+- Always use Tailwind classes for styling HTML elements; avoid using CSS or inline styles
+- Use `className={}` with conditional classes using logical expressions instead of ternary operators when possible
+- Implement responsive design with a mobile-first approach
+- Use shadcn/ui components according to their documentation
+- Ensure proper contrast ratios and accessibility standards
+
+### State Management and Data Fetching
+
+- Minimize the use of `useEffect`; favor derived state and memoization when possible
+- Use React Query for data fetching, caching, and synchronization with Supabase
+- Implement proper loading states and error handling for all data operations
+- Use Supabase client for auth and database operations
+
+### Error Handling and UX
+
+- Implement comprehensive error handling with user-friendly messages
+- Handle all edge cases and loading states explicitly
+- Create reusable error boundary components
+- Use toast notifications for important user feedback
+
+### Component Guidelines
+
+- Use consts for function components: `const ComponentName = () => {}`
+- Implement accessibility features on all interactive elements
+- Use event handlers with "handle" prefix: `const handleClick = () => {}`
+- Properly implement form validation with appropriate feedback
+- Create reusable, well-typed custom hooks when needed
+
+## Backend Development (Python, Flask, Supabase)
+
+### Code Style and Structure
+
+- Use Python type hints for all function signatures where possible
+- Organize Flask app with proper structure: initialization, blueprints, models, utilities, config
+- Use lowercase with underscores for directories and files (e.g., `blueprints/user_routes.py`)
+- Implement function-based views with clear responsibility separation
+
+### API Design
+
+- Create RESTful endpoints with appropriate HTTP methods
+- Implement proper error handling and validation at route level
+- Use Flask Blueprints for logical API grouping
+- Return consistent JSON responses with appropriate status codes
+
+### Supabase Integration
+
+- Use the Supabase Python library for all database interactions
+- Implement proper error handling for Supabase operations
+- Use environment variables for Supabase credentials
+- Create helper functions for common Supabase operations
+- Leverage Supabase features like Row Level Security appropriately
+
+### Authentication and Authorization
+
+- Use Supabase Auth for user management
+- Implement proper middleware for authenticated routes
+- Handle JWT validation and refresh properly
+- Create helper functions for common auth patterns
+
+### Error Handling
+
+- Prioritize error handling at the beginning of functions
+- Use early returns for error conditions to avoid deep nesting
+- Place the happy path last in functions for improved readability
+- Implement proper logging for errors with appropriate level
+- Return user-friendly error messages with appropriate status codes
+
+## Database and Data Modeling
+
+- Design efficient database schemas with proper relationships
+- Use Supabase for PostgreSQL database management
+- Implement Row Level Security policies for data protection
+- Create appropriate indexes for performance optimization
+- Use transactions for operations that require atomicity
+
+## Project Structure
+
+- Frontend:
+  - `/src` directory for Next.js components and pages
+  - Organize by feature and component type
+  - Shared components in `/src/components`
+  - Page components in `/src/app` (Next.js App Router)
+  - Utilities in `/src/utils`
+  - Types in `/src/types`
+
+- Backend:
+  - `/backend` for Flask application
+  - `/supabase` for Supabase configuration and utilities
+  - Organize Flask app with blueprints, models, and utilities
+  - Use environment files for configuration management
+
+## Development Workflow
+
+- Use environment variables for configuration
+- Implement proper error logging
+- Write clear, helpful comments for complex logic
+- Be methodical: plan first, then implement
+- When asked to solve a problem:
+  1. Break down the requirements step by step
+  2. Describe your approach in detail before coding
+  3. Write well-structured, thoroughly tested code
+  4. Verify all edge cases and requirements are met

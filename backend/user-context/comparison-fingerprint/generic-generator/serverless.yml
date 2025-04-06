@@ -1,0 +1,111 @@
+service: multi-document-generator
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: python3.9
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'us-east-1'}
+  memorySize: 10240
+  timeout: 900
+  ephemeralStorageSize: 10240
+  
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - s3:GetObject
+            - s3:PutObject
+            - s3:ListBucket
+            - s3:DeleteObject
+          Resource:
+            - arn:aws:s3:::${self:custom.buckets.${opt:stage, self:provider.stage}.documents}/*
+            - arn:aws:s3:::${self:custom.buckets.${opt:stage, self:provider.stage}.documents}
+            - arn:aws:s3:::${self:custom.buckets.${opt:stage, self:provider.stage}.profiles}/*
+            - arn:aws:s3:::${self:custom.buckets.${opt:stage, self:provider.stage}.profiles}
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: arn:aws:logs:*:*:*
+  
+  environment:
+    DOCUMENTS_BUCKET: ${self:custom.buckets.${opt:stage, self:provider.stage}.documents}
+    PROFILES_BUCKET: ${self:custom.buckets.${opt:stage, self:provider.stage}.profiles}
+    MODEL_NAME: ${self:custom.models.${opt:stage, self:provider.stage}}
+    TRANSFORMERS_CACHE: /mnt/efs/models
+    LOG_LEVEL: INFO
+
+custom:
+  buckets:
+    dev:
+      documents: dev-mun-connect-documents
+      profiles: dev-mun-connect-profiles
+    test:
+      documents: test-mun-connect-documents
+      profiles: test-mun-connect-profiles
+    prod:
+      documents: mun-connect-documents
+      profiles: mun-connect-profiles
+  
+  models:
+    dev: distilgpt2
+    test: distilgpt2
+    prod: mistralai/Mistral-7B-Instruct-v0.2
+  
+  pythonRequirements:
+    dockerizePip: true
+    slim: true
+    usePoetry: false
+    layer: true
+  
+  prune:
+    automatic: true
+    includeLayers: true
+  
+  esbuild:
+    bundle: true
+    minify: true
+
+functions:
+  generate:
+    handler: multi_document_generator.lambda_handler
+    events:
+      - http:
+          path: documents/generate
+          method: post
+          cors: true
+    fileSystemConfig:
+      localMountPath: /mnt/efs
+      arn: ${self:custom.efsAccessPoint.${opt:stage, self:provider.stage}}
+    vpc:
+      securityGroupIds:
+        - ${self:custom.vpc.${opt:stage, self:provider.stage}.securityGroupId}
+      subnetIds: ${self:custom.vpc.${opt:stage, self:provider.stage}.subnetIds}
+  
+  generate-test:
+    handler: multi_document_generator.lambda_handler
+    events:
+      - http:
+          path: documents/generate-test
+          method: post
+          cors: true
+    environment:
+      EXECUTION_ENVIRONMENT: test
+      MODEL_NAME: distilgpt2
+
+plugins:
+  - serverless-python-requirements
+  - serverless-esbuild
+  - serverless-prune-plugin
+
+package:
+  patterns:
+    - '!node_modules/**'
+    - '!.venv/**'
+    - '!.git/**'
+    - '!**/__pycache__/**'
+    - '!**/*.pyc' 
