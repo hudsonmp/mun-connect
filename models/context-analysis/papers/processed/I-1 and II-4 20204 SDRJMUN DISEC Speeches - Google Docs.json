@@ -1,0 +1,69 @@
+{
+    "document_name": "I-1 and II-4 20204 SDRJMUN DISEC Speeches - Google Docs.pdf",
+    "multi_topic": true,
+    "content": {
+        "NATO": "\u202dSpeech:\u202c\n\u202dThe North Atlantic Treaty Organization is a global threat to peace and security, and they now have clear\u202c\n\u202dpathways to implementing AI-enabled weapon systems, specifically Lethal Autonomous Weapons\u202c\n\u202dSystems, known as LAWS. This means that the United Nations shouldn\u2019t impose additional restrictions\u202c\n\u202don the deployment of these systems for defensive purposes because they are what will protect us from\u202c\n\u202dthese dangerous global aggressors. The Democratic People\u2019s Republic of Korea\u2019s resolution on this topic\u202c\n\u202dfurther emphasizes this crucial point by establishing a review board to ensure the safe deployment of\u202c\n\u202dLAWS for purely defensive applications. By monitoring these automated weaponry systems, we can\u202c\n\u202dreduce civilian casualties and infrastructure damage while increasing our defensive capabilities to protect\u202c\n\u202dagainst imminent threats. Additionally, by helping nations adapt their systems to reduce casualties, we can\u202c\n\u202dimprove the security of all countries. I urge all nations to endorse this resolution as it ensures that a state\u2019s\u202c\n\u202dfundamental right to defense is protected using modern artificial intelligence technology.\u202c\n\u202dAdditional Notes and Ideas:\u202c\n\u202dSpeech:\u202c\n\u202d500,000 dead, and another 22 million displaced. You may initially think I\u2019m referring to a world war or a\u202c\n\u202dglobal pandemic, but you would be mistaken. Instead, these tragedies all occurred in one country, Syria,\u202c\n\u202dbecause of hostile rebel groups. A plethora of nations have supplied these catastrophic rebel groups with\u202c\n\u202dweapons, soldiers, and training. Although these nations must be held accountable, the objective of this\u202c\n\u202dresolution is not to do this; instead, this resolution is for the people of Syria. These tragedies have\u202c\n\u202doccurred for far too long, so it\u2019s time that we implement a viable framework to disarm these rebel groups\u202c\n\u202dand restore peace to the nation. By effectively halting the inflow of arms to any rebel groups in Syria and\u202c\n\u202dby establishing neutral zones that will disarm the rebel groups with existing weapons, we will effectively\u202c\n\u202dend the Syrian Civil War. and restore order to the region. Whether you have supplied arms to these rebel\u202c\n\u202dgroups in the past or simply feel compelled to aid the desperate people of Syria, I strongly urge you to\u202c\n\u202dstand with the Democratic People\u2019s Republic of Korea and support this thorough resolution.\u202c\n\u202dAdditional Notes and Ideas:\u202c",
+        " Additional Notes and Ideas: ": ""
+    },
+    "formatting": {
+        "NATO": {
+            "headers": [
+                {
+                    "text": "\u202dSpeech:\u202c",
+                    "page": 1,
+                    "size": 10.994999885559082,
+                    "bold": true
+                },
+                {
+                    "text": "\u202dAdditional Notes and Ideas:\u202c",
+                    "page": 1,
+                    "size": 10.994999885559082,
+                    "bold": true
+                },
+                {
+                    "text": "\u202dSpeech:\u202c",
+                    "page": 2,
+                    "size": 10.994999885559082,
+                    "bold": true
+                },
+                {
+                    "text": "\u202dAdditional Notes and Ideas:\u202c",
+                    "page": 2,
+                    "size": 10.994999885559082,
+                    "bold": true
+                }
+            ],
+            "paragraphs": []
+        },
+        " Additional Notes and Ideas: ": {
+            "headers": [
+                {
+                    "text": "\u202dSpeech:\u202c",
+                    "page": 1,
+                    "size": 10.994999885559082,
+                    "bold": true
+                },
+                {
+                    "text": "\u202dSpeech:\u202c",
+                    "page": 2,
+                    "size": 10.994999885559082,
+                    "bold": true
+                }
+            ],
+            "paragraphs": []
+        }
+    },
+    "classification": {
+        "topics": {
+            "NATO": {
+                "document_type": "speech",
+                "label": 1
+            },
+            " Additional Notes and Ideas: ": {
+                "document_type": "speech",
+                "label": 1
+            }
+        }
+    },
+    "document_type": "speech"
+}
