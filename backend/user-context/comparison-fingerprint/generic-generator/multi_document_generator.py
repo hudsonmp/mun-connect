@@ -19,6 +19,7 @@ import boto3
 import botocore
 from typing import Dict, List, Any, Optional, Tuple, Literal, Union
 from functools import lru_cache
+import traceback
 
 import torch
 from transformers import (
@@ -272,80 +273,100 @@ class MultiDocumentGenerator:
         output_s3_bucket: Optional[str] = None
     ) -> Tuple[str, Dict[str, Any]]:
         """
-        Generate a document mimicking a delegate's style.
+        Generate a document mimicking a delegate's writing style.
         
         Args:
-            delegate_profile: Either the delegate profile dict or an S3 key to the profile
+            delegate_profile: Delegate profile (dict or S3 path)
             document_type: Type of document to generate
-            topic: Optional override for the document topic
-            committee: Optional override for the committee
-            country: Optional override for the country
-            additional_params: Additional parameters specific to document types
-            profile_s3_bucket: S3 bucket containing the delegate profile
-            output_s3_bucket: S3 bucket to save the generated document
+            topic: Document topic
+            committee: Committee name
+            country: Country being represented
+            additional_params: Additional parameters for document generation
+            profile_s3_bucket: S3 bucket containing delegate profiles
+            output_s3_bucket: S3 bucket for output
             
         Returns:
-            Tuple of (output path or S3 URI, generated document data)
+            Tuple of (generated text, structured document data)
         """
         start_time = time.time()
+        logger.info(f"Generating {document_type} for topic: {topic}, committee: {committee}, country: {country}")
         
-        # Determine output bucket
-        output_bucket = output_s3_bucket or self.output_bucket
-        if not output_bucket:
-            raise ValueError("No output S3 bucket specified")
-        
-        # Load delegate profile from S3 if necessary
-        if isinstance(delegate_profile, str):
-            if not profile_s3_bucket:
-                raise ValueError("S3 bucket for delegate profile not specified")
-                
-            logger.info(f"Loading delegate profile from S3: {profile_s3_bucket}/{delegate_profile}")
-            try:
-                delegate_profile = read_from_s3(profile_s3_bucket, delegate_profile)
-            except Exception as e:
-                logger.error(f"Error loading delegate profile: {e}", exc_info=True)
-                raise
-        
-        logger.info(f"Generating {document_type} for {delegate_profile.get('metadata', {}).get('country', 'unknown country')}")
-        
-        # Extract style information and metadata
-        metadata = self._extract_metadata(delegate_profile, topic, committee, country, document_type)
-        style_info = self._extract_style_information(delegate_profile)
-        
-        # Create document-specific parameters
-        doc_params = additional_params or {}
-        
-        # Generate prompt based on document type
-        if document_type == "position_paper":
-            prompt = self._create_position_paper_prompt(metadata, style_info, doc_params)
-        elif document_type == "speech":
-            prompt = self._create_speech_prompt(metadata, style_info, doc_params)
-        elif document_type == "resolution":
-            prompt = self._create_resolution_prompt(metadata, style_info, doc_params)
-        else:
-            raise ValueError(f"Unsupported document type: {document_type}")
-        
-        # Generate text
-        generated_text = self._generate_text(prompt)
-        
-        # Process and structure the generated text based on document type
-        if document_type == "position_paper":
-            document_data = self._structure_position_paper(generated_text, metadata)
-        elif document_type == "speech":
-            document_data = self._structure_speech(generated_text, metadata)
-        elif document_type == "resolution":
-            document_data = self._structure_resolution(generated_text, metadata)
-        else:
-            raise ValueError(f"Unsupported document type: {document_type}")
-        
-        # Save the generated document to S3
-        output_s3_key = self._save_document_to_s3(document_data, output_bucket)
-        
-        generation_time = time.time() - start_time
-        logger.info(f"{document_type.capitalize()} generation completed in {generation_time:.2f} seconds")
-        logger.info(f"Document saved to s3://{output_bucket}/{output_s3_key}")
-        
-        return f"s3://{output_bucket}/{output_s3_key}", document_data
+        try:
+            # Normalize profile to ensure all required fields exist
+            normalized_profile = self._normalize_delegate_profile(delegate_profile)
+            
+            # Set up S3 buckets
+            output_bucket = output_s3_bucket or self.output_bucket
+            
+            # Validate inputs
+            if not topic or not committee or not country:
+                raise ValueError("Missing required parameters: topic, committee, or country")
+            
+            # Prepare additional parameters
+            params = additional_params or {}
+            
+            # Extract metadata
+            metadata = self._extract_metadata(
+                normalized_profile, topic, committee, country, document_type
+            )
+            
+            # Extract style information
+            style_info = self._extract_style_information(normalized_profile)
+            
+            # Create generation prompt based on document type
+            if document_type == "position_paper":
+                prompt = self._create_position_paper_prompt(metadata, style_info, params)
+            elif document_type == "speech":
+                prompt = self._create_speech_prompt(metadata, style_info, params)
+            elif document_type == "resolution":
+                prompt = self._create_resolution_prompt(metadata, style_info, params)
+            else:
+                raise ValueError(f"Unsupported document type: {document_type}")
+            
+            # Add RAG context if available
+            if hasattr(self, 'context_prompt'):
+                prompt += "\n\n" + self.context_prompt
+            
+            # Generate text
+            generated_text = self._generate_text(prompt)
+            
+            # Clean and structure the generated text
+            if document_type == "position_paper":
+                document_data = self._structure_position_paper(generated_text, metadata)
+            elif document_type == "speech":
+                document_data = self._structure_speech(generated_text, metadata)
+            elif document_type == "resolution":
+                document_data = self._structure_resolution(generated_text, metadata)
+            
+            # Save to S3 if a bucket is provided
+            if output_bucket:
+                s3_path = self._save_document_to_s3(document_data, output_bucket)
+                document_data["s3_path"] = s3_path
+            
+            # Add generation info
+            generation_time = time.time() - start_time
+            document_data["generation_info"] = {
+                "model": self.model_name,
+                "generation_time_seconds": round(generation_time, 2),
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
+            }
+            
+            logger.info(f"Generated {document_type} in {round(generation_time, 2)} seconds")
+            return generated_text, document_data
+            
+        except Exception as e:
+            generation_time = time.time() - start_time
+            logger.error(f"Error generating {document_type}: {e}")
+            logger.error(traceback.format_exc())
+            
+            # Return error information
+            error_data = {
+                "error": str(e),
+                "document_type": document_type,
+                "generation_time_seconds": round(generation_time, 2),
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
+            }
+            return "", error_data
     
     def _extract_metadata(
         self, 
@@ -1244,6 +1265,119 @@ Generate a complete resolution following these guidelines.
             logger.error(f"Error saving document to S3: {e}", exc_info=True)
             raise
 
+    def _normalize_delegate_profile(self, profile: Union[Dict[str, Any], str]) -> Dict[str, Any]:
+        """
+        Normalize delegate profile to ensure all required fields exist
+        
+        Args:
+            profile: Raw delegate profile (dict or S3 path)
+            
+        Returns:
+            Normalized profile
+        """
+        # Load profile from S3 if needed
+        if isinstance(profile, str):
+            profile = self._load_profile_from_s3(profile)
+        
+        # Get writing style object or create empty one
+        writing_style = profile.get("writing_style", {})
+        if isinstance(writing_style, str):
+            writing_style = {"general_style": writing_style}
+        
+        # Get tone object or create empty one
+        tone = profile.get("tone", {})
+        if isinstance(tone, str):
+            tone = {"general_tone": tone}
+        
+        # Ensure all required fields exist
+        normalized = {
+            "writing_style": writing_style,
+            "formality_level": profile.get("formality_level", "moderate"),
+            "complexity_level": profile.get("complexity_level", "moderate"),
+            "persuasion_style": profile.get("persuasion_style", "balanced"),
+            "reasoning_approach": profile.get("reasoning_approach", "balanced"),
+            "tone": tone,
+            
+            # Copy additional fields that might be useful
+            "content_patterns": profile.get("content_patterns", {}),
+            "writing_fingerprint": profile.get("writing_fingerprint", {})
+        }
+        
+        return normalized
+    
+    def _create_default_profile(self) -> Dict[str, Any]:
+        """
+        Create a default delegate profile when none is provided
+        
+        Returns:
+            Default profile with standard values
+        """
+        return {
+            "user_id": str(uuid.uuid4()),
+            "writing_style": {
+                "formality_level": "moderate",
+                "complexity_level": "moderate",
+                "sentence_length": "medium",
+                "vocabulary_diversity": 0.5,
+                "active_voice_ratio": 0.7
+            },
+            "persuasion_style": "balanced",
+            "reasoning_approach": "balanced",
+            "tone": {
+                "dominant_sentiment": "neutral",
+                "emotionality": 0.3,
+                "assertiveness": 0.5
+            },
+            "content_patterns": {
+                "citation_frequency": 0.2,
+                "rhetorical_devices": ["analogy", "rhetorical question"],
+                "structural_preferences": {"intro_length": "medium", "conclusion_strength": "medium"}
+            }
+        }
+    
+    def _load_profile_from_s3(self, s3_uri: str) -> Dict[str, Any]:
+        """
+        Load a delegate profile from S3
+        
+        Args:
+            s3_uri: S3 URI (s3://bucket/key)
+            
+        Returns:
+            Loaded profile as dict
+        """
+        # Parse S3 URI
+        parts = s3_uri.replace('s3://', '').split('/', 1)
+        if len(parts) != 2:
+            raise ValueError(f"Invalid S3 URI: {s3_uri}")
+            
+        bucket, key = parts
+        
+        try:
+            return read_from_s3(bucket, key)
+        except Exception as e:
+            logger.error(f"Error loading profile from S3: {e}")
+            return {}
+    
+    def integrate_rag_context(self, rag_context: Dict[str, Any]) -> None:
+        """
+        Integrate RAG context from background guide
+        
+        Args:
+            rag_context: Formatted RAG context from background guide processor
+        """
+        # Store context for use during generation
+        self.rag_context = rag_context
+        
+        # Create a prompt addition based on RAG context
+        context_prompt = "Reference information:\n\n"
+        
+        for section in rag_context.get("sections", []):
+            context_prompt += f"## {section.get('section', 'Information')}\n"
+            context_prompt += f"{section.get('text', '')}\n\n"
+        
+        # Store for use in prompts
+        self.context_prompt = context_prompt
+
 # Test configuration for smaller models
 TEST_CONFIG = {
     "small_model": "distilgpt2",  # Small model for testing
@@ -1327,7 +1461,7 @@ def lambda_handler(event, context):
         )
         
         # Generate document
-        s3_uri, document_data = generator.generate_document(
+        generated_text, document_data = generator.generate_document(
             delegate_profile=delegate_profile,
             document_type=document_type,
             topic=topic,
@@ -1342,7 +1476,7 @@ def lambda_handler(event, context):
         return {
             "statusCode": 200,
             "body": json.dumps({
-                "s3_uri": s3_uri,
+                "generated_text": generated_text,
                 "document_type": document_type,
                 "country": document_data["metadata"]["country"],
                 "topic": document_data["metadata"]["main_topic"],
@@ -1563,13 +1697,13 @@ def main():
         
         # Generate document with sample profile
         sample_profile = TestFixtures.get_sample_delegate_profile()
-        s3_uri, _ = generator.generate_document(
+        generated_text, _ = generator.generate_document(
             delegate_profile=sample_profile,
             document_type=args.type,
             output_s3_bucket=args.output_bucket
         )
         
-        print(f"Test document generated and saved to: {s3_uri}")
+        print(f"Test document generated and saved to: {generated_text}")
     
     else:
         parser.print_help()

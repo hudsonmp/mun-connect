@@ -19,6 +19,14 @@ try:
 except ImportError as e:
     print(f"Could not register background guide blueprint: {e}")
 
+# Register mind map blueprint
+try:
+    from mind_map.api import mind_map_blueprint
+    app.register_blueprint(mind_map_blueprint, url_prefix='/api/mind-map')
+    print("Mind map blueprint registered successfully")
+except ImportError as e:
+    print(f"Could not register mind map blueprint: {e}")
+
 # Authentication routes
 @app.route('/api/auth/signup', methods=['POST'])
 def signup():

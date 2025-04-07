@@ -2,18 +2,35 @@
 Summarization module for background guide processing.
 
 This module provides functions to summarize document sections using either
-local models or OpenAI API.
+local models or AI providers through the unified interface.
 """
 
 import os
-import openai
 from typing import Optional, Dict, Any
 from transformers import pipeline
 
-# Set OpenAI API key from environment if available
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
-if OPENAI_API_KEY:
-    openai.api_key = OPENAI_API_KEY
+# Import the unified AI interface
+from ..shared.ai_interface import AIInterface
+from ..shared.prompt_templates import SUMMARY_TEMPLATE
+from ..shared.validators import has_required_sections
+
+# Default configuration for AI providers
+DEFAULT_PROVIDER = "openai"
+DEFAULT_MODEL = "gpt-4o-mini"
+
+def get_ai_interface(provider: str = DEFAULT_PROVIDER, model: str = DEFAULT_MODEL) -> AIInterface:
+    """
+    Get an instance of the AI interface with appropriate configuration.
+    
+    Args:
+        provider: The AI provider to use
+        model: The model to use
+        
+    Returns:
+        Configured AIInterface instance
+    """
+    api_key = os.environ.get(f"{provider.upper()}_API_KEY", "")
+    return AIInterface(provider=provider, api_key=api_key, default_model=model)
 
 def summarize_content(
     text: str, 
@@ -24,7 +41,7 @@ def summarize_content(
     openai_model: str = "gpt-4o-mini"
 ) -> str:
     """
-    Summarize text content using either a local model or OpenAI API.
+    Summarize text content using either a local model or AI provider.
     
     Args:
         text: Text to summarize
@@ -41,17 +58,61 @@ def summarize_content(
     if len(text.split()) < min_length:
         return text
     
-    if use_openai and OPENAI_API_KEY:
-        return summarize_with_openai(text, openai_model)
-    elif summarizer:
-        return summarize_with_local_model(text, summarizer, max_length, min_length)
+    # Determine which approach to use
+    if use_openai:
+        provider = "openai"
+        model = openai_model
     else:
-        # Fallback to a simple extractive summary
-        return extractive_summary(text, max_length)
+        provider = "local"
+        model = "mistralai/Mistral-7B-Instruct-v0.2"  # Default local model
+    
+    # Use AI interface if we're using an AI provider
+    if use_openai or provider == "anthropic":
+        try:
+            ai = get_ai_interface(provider, model)
+            
+            # Use template-based summarization
+            variables = {
+                "topic": "the given topic",
+                "text": text
+            }
+            summary = ai.generate_with_template(
+                SUMMARY_TEMPLATE, 
+                variables,
+                temperature=0.5,
+                max_tokens=500
+            )
+            
+            # Validate that the summary has the required sections
+            required_sections = ["KEY ISSUES", "HISTORICAL CONTEXT", "CURRENT POSITION", "COMMITTEE EXPECTATIONS"]
+            if not has_required_sections(summary, required_sections):
+                # Try again with more explicit instructions
+                summary = ai.generate_with_validation(
+                    f"Summarize the following text into sections including KEY ISSUES, HISTORICAL CONTEXT, CURRENT POSITION, and COMMITTEE EXPECTATIONS:\n\n{text}",
+                    lambda s: has_required_sections(s, required_sections),
+                    max_attempts=2,
+                    temperature=0.3,
+                    max_tokens=500
+                )
+            
+            return summary
+            
+        except Exception as e:
+            print(f"Error using AI interface for summarization: {e}")
+            # Fall back to local model or extractive summary
+    
+    # Use local model if available
+    if summarizer:
+        return summarize_with_local_model(text, summarizer, max_length, min_length)
+    
+    # Fallback to a simple extractive summary
+    return extractive_summary(text, max_length)
 
+# Keep the existing implementations as fallbacks
 def summarize_with_openai(text: str, model: str = "gpt-4o-mini") -> str:
     """
-    Generate a summary using OpenAI API.
+    Legacy function for direct OpenAI API usage.
+    This is kept for backward compatibility.
     
     Args:
         text: Text to summarize
@@ -60,30 +121,30 @@ def summarize_with_openai(text: str, model: str = "gpt-4o-mini") -> str:
     Returns:
         Generated summary
     """
+    # Create AI interface and use it instead of direct OpenAI calls
+    ai = get_ai_interface("openai", model)
+    
+    # Handle text length - OpenAI models have token limits
+    # A simple approximation is to count words and limit to 4000 words (~3000 tokens)
+    words = text.split()
+    if len(words) > 4000:
+        # Take first and last portions of the text
+        text = " ".join(words[:2000]) + " ... " + " ".join(words[-2000:])
+    
+    prompt = f"Please summarize the following text, focusing on the key points and main themes:\n\n{text}"
+    
     try:
-        # Handle text length - OpenAI models have token limits
-        # A simple approximation is to count words and limit to 4000 words (~3000 tokens)
-        words = text.split()
-        if len(words) > 4000:
-            # Take first and last portions of the text
-            text = " ".join(words[:2000]) + " ... " + " ".join(words[-2000:])
-        
-        response = openai.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": "You are an expert at summarizing complex documents. Create a concise but comprehensive summary that captures the key points, main themes, and essential information from the text provided."},
-                {"role": "user", "content": f"Please summarize the following text, focusing on the key points and main themes:\n\n{text}"}
-            ],
+        return ai.generate(
+            prompt,
             temperature=0.5,
-            max_tokens=500,
+            max_tokens=500
         )
-        
-        return response.choices[0].message.content
     except Exception as e:
         print(f"Error using OpenAI API for summarization: {e}")
         # Fallback to simple extractive summary
         return extractive_summary(text)
 
+# Rest of the module can remain unchanged
 def summarize_with_local_model(
     text: str, 
     summarizer: pipeline, 
@@ -206,25 +267,25 @@ def extract_key_insights(text: str, summary: str, use_openai: bool = True) -> li
     Returns:
         List of key insights as bullet points
     """
-    if use_openai and OPENAI_API_KEY:
+    # Update to use the AI interface
+    if use_openai:
         try:
-            response = openai.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You are an expert at extracting key insights from complex documents. Create a list of 3-5 concise bullet points capturing the most important information."},
-                    {"role": "user", "content": f"Extract 3-5 key insights as bullet points from this text and its summary.\n\nTEXT: {text}\n\nSUMMARY: {summary}"}
-                ],
+            ai = get_ai_interface("openai", "gpt-4o-mini")
+            
+            prompt = f"Extract 3-5 key insights as bullet points from this text and its summary.\n\nTEXT: {text}\n\nSUMMARY: {summary}"
+            
+            result = ai.generate(
+                prompt,
                 temperature=0.3,
-                max_tokens=300,
+                max_tokens=300
             )
             
             # Process the response to extract bullet points
-            result = response.choices[0].message.content
             bullet_points = [point.strip().lstrip('•-*').strip() for point in result.split('\n') if point.strip()]
             return bullet_points
             
         except Exception as e:
-            print(f"Error using OpenAI API for key insights: {e}")
+            print(f"Error using AI interface for key insights: {e}")
             # Fallback to rule-based extraction
     
     # Simple rule-based extraction of potential key points
@@ -250,7 +311,10 @@ def extract_key_insights(text: str, summary: str, use_openai: bool = True) -> li
     if len(insights) < 3:
         summary_sentences = summary.split(". ")
         for sentence in summary_sentences:
-            if sentence not in insights and len(insights) < 3:
+            if sentence and sentence not in insights:
                 insights.append(sentence)
+                if len(insights) >= 5:
+                    break
     
-    return insights 
+    # Return the insights, cleaned up a bit
+    return [insight.strip() for insight in insights[:5]] 

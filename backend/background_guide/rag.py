@@ -84,62 +84,130 @@ def create_vector_index(
 
 def retrieve_context(
     query: str,
-    embedding_model: SentenceTransformer,
+    embed_model: SentenceTransformer,
     index_dir: str,
     top_k: int = 3
 ) -> List[Dict[str, Any]]:
     """
-    Retrieve relevant context for a query using the vector index.
+    Retrieve relevant context from a vector index for a given query.
     
     Args:
-        query: Query to search for
-        embedding_model: Model to use for generating query embedding
-        index_dir: Directory with index files
+        query: The query to search for
+        embed_model: Model to use for generating query embedding
+        index_dir: Directory containing the FAISS index and metadata
         top_k: Number of top results to return
         
     Returns:
-        List of relevant segments with text and metadata
+        List of relevant segments with text, section, and summary
     """
-    # Check if index exists
-    index_path = os.path.join(index_dir, "vector.index")
-    texts_path = os.path.join(index_dir, "texts.json")
-    metadata_path = os.path.join(index_dir, "metadata.json")
+    # Load the index and metadata
+    index_path = os.path.join(index_dir, "faiss_index.bin")
+    metadata_path = os.path.join(index_dir, "metadata.pkl")
     
-    if not os.path.exists(index_path) or not os.path.exists(texts_path) or not os.path.exists(metadata_path):
-        raise FileNotFoundError(f"Index files not found in {index_dir}")
+    if not os.path.exists(index_path) or not os.path.exists(metadata_path):
+        print(f"Index or metadata not found in {index_dir}")
+        return []
     
-    # Load index
-    index = faiss.read_index(index_path)
-    
-    # Load texts and metadata
-    with open(texts_path, "r", encoding="utf-8") as f:
-        texts = json.load(f)
+    try:
+        # Load FAISS index
+        index = faiss.read_index(index_path)
         
-    with open(metadata_path, "r", encoding="utf-8") as f:
-        metadata = json.load(f)
+        # Load metadata
+        with open(metadata_path, 'rb') as f:
+            metadata = pickle.load(f)
+        
+        # Embed the query
+        query_embedding = embed_model.encode([query])[0]
+        query_embedding = np.array([query_embedding]).astype('float32')
+        
+        # Search the index
+        distances, indices = index.search(query_embedding, top_k)
+        
+        # Prepare the results
+        results = []
+        for i, idx in enumerate(indices[0]):
+            if idx != -1 and idx < len(metadata):  # -1 means no result
+                # Get the segment metadata
+                segment = metadata[idx]
+                
+                # Calculate relevance score (0-1 scale, lower distance = higher relevance)
+                max_distance = 2.0  # Maximum possible distance (approx.)
+                relevance = 1.0 - min(distances[0][i] / max_distance, 1.0)
+                
+                # Add result with relevance score
+                result = {
+                    "text": segment.get("text", ""),
+                    "section": segment.get("section", "General"),
+                    "summary": segment.get("summary", ""),
+                    "score": float(relevance)
+                }
+                results.append(result)
+        
+        return results
     
-    # Generate query embedding
-    query_embedding = embedding_model.encode([query])[0].astype("float32")
-    query_embedding = query_embedding.reshape(1, -1)
+    except Exception as e:
+        print(f"Error retrieving context: {e}")
+        return []
+
+def provide_formatted_context(
+    query: str,
+    embed_model: SentenceTransformer,
+    index_dir: str,
+    top_k: int = 5
+) -> Dict[str, Any]:
+    """
+    Provide RAG context in a standardized format for document generation
     
-    # Search the index
-    distances, indices = index.search(query_embedding, top_k)
-    
-    # Format results
-    results = []
-    for i, idx in enumerate(indices[0]):
-        if idx < 0 or idx >= len(texts):
-            continue  # Skip invalid indices
-            
-        result = {
-            "text": texts[idx],
-            "distance": float(distances[0][i]),
-            "score": 1.0 / (1.0 + float(distances[0][i])),  # Convert distance to similarity score
-            **metadata[idx]  # Add all metadata
+    Args:
+        query: Query string for RAG retrieval
+        embed_model: Model to use for embedding
+        index_dir: Directory containing the FAISS index
+        top_k: Number of results to return
+        
+    Returns:
+        Formatted context for document generation
+    """
+    try:
+        # Retrieve context using existing RAG functionality
+        contexts = retrieve_context(query, embed_model, index_dir, top_k)
+        
+        # Format for document generator
+        rag_context = {
+            "sections": [
+                {
+                    "section": ctx.get("section", "General"),
+                    "text": ctx.get("text", ""),
+                    "summary": ctx.get("summary", ""),
+                    "relevance": ctx.get("score", 1.0)
+                }
+                for ctx in contexts
+            ],
+            "query": query,
+            "metadata": {
+                "index_dir": index_dir,
+                "top_k": top_k,
+                "timestamp": import_datetime_and_get_timestamp()
+            }
         }
-        results.append(result)
-    
-    return results
+        
+        return rag_context
+        
+    except Exception as e:
+        print(f"Error providing formatted context: {e}")
+        # Return empty but valid structure
+        return {
+            "sections": [],
+            "query": query,
+            "metadata": {
+                "error": str(e),
+                "timestamp": import_datetime_and_get_timestamp()
+            }
+        }
+
+def import_datetime_and_get_timestamp():
+    """Import datetime and get current timestamp to avoid circular imports"""
+    from datetime import datetime
+    return datetime.now().isoformat()
 
 def search_topic_files(
     query: str,

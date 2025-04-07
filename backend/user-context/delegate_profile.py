@@ -507,20 +507,136 @@ class DelegateProfile:
     
     def _merge_dict(self, target: Dict[str, Any], source: Dict[str, Any]):
         """
-        Merge source dictionary into target dictionary.
+        Recursively merge dictionaries with nested dictionaries.
         
-        This is a simplified implementation that may need customization 
-        depending on the exact structure of the analysis results.
+        Args:
+            target: The target dictionary to merge into
+            source: The source dictionary to merge from
         """
         for key, value in source.items():
-            if key in target:
-                if isinstance(target[key], dict) and isinstance(value, dict):
-                    self._merge_dict(target[key], value)
-                elif isinstance(target[key], list) and isinstance(value, list):
-                    target[key].extend(value)
-                else:
-                    # For simple values, overwrite with the latest
-                    target[key] = value
+            if key in target and isinstance(target[key], dict) and isinstance(value, dict):
+                # If both are dictionaries, merge recursively
+                self._merge_dict(target[key], value)
             else:
-                # Key doesn't exist in target, so add it
-                target[key] = value 
+                # Otherwise replace/add the value
+                target[key] = value
+    
+    def integrate_mind_map_data(self, mind_map_data: Dict[str, Any], 
+                               country: str, committee: str) -> Dict[str, Any]:
+        """
+        Integrate mind map data into delegate profile
+        
+        Args:
+            mind_map_data: Mind map output structure
+            country: Country represented by delegate
+            committee: Committee name
+            
+        Returns:
+            Result of storage operation
+        """
+        try:
+            # Extract topics from mind map structure
+            topics = []
+            if "base_structure" in mind_map_data and "topics" in mind_map_data["base_structure"]:
+                topics = mind_map_data["base_structure"]["topics"]
+            elif "topics" in mind_map_data:
+                topics = mind_map_data["topics"]
+            
+            # Extract connections if available
+            connections = []
+            if "base_structure" in mind_map_data and "connections" in mind_map_data["base_structure"]:
+                connections = mind_map_data["base_structure"]["connections"]
+            elif "connections" in mind_map_data:
+                connections = mind_map_data["connections"]
+            
+            # Extract country positions if available
+            country_positions = {}
+            if "country_positions" in mind_map_data:
+                country_positions = mind_map_data["country_positions"]
+            
+            # Format mind map data as analysis
+            analysis_content = {
+                "committee": committee,
+                "country": country,
+                "topics": topics,
+                "connections": connections,
+                "country_positions": country_positions,
+                "integrated_at": datetime.now().isoformat()
+            }
+            
+            # Store as analysis result
+            return self.store_analysis_result(
+                document_type="committee_research",
+                json_content=analysis_content,
+                analysis_type="mind_map_analysis"
+            )
+        except Exception as e:
+            logger.error(f"Error integrating mind map data: {e}")
+            raise
+    
+    def prepare_for_document_generation(self) -> Dict[str, Any]:
+        """
+        Format delegate profile for document generation
+        
+        This method creates a properly formatted profile that can be directly
+        used by the MultiDocumentGenerator.
+        
+        Returns:
+            Dictionary formatted for MultiDocumentGenerator
+        """
+        try:
+            logger.info(f"Preparing profile for document generation, user_id={self.user_id}")
+            
+            # Generate consolidated profile
+            profile = self.generate_consolidated_profile()
+            
+            # Create a standardized structure for document generation
+            document_profile = {
+                "user_id": profile.get("user_id"),
+                "writing_style": profile.get("writing_style", {})
+            }
+            
+            # Ensure all required fields exist with defaults
+            required_style_fields = [
+                "formality_level", 
+                "complexity_level",
+                "sentence_length",
+                "vocabulary_diversity",
+                "active_voice_ratio"
+            ]
+            
+            if "writing_style" not in document_profile:
+                document_profile["writing_style"] = {}
+                
+            for field in required_style_fields:
+                if field not in document_profile["writing_style"]:
+                    # Set sensible defaults
+                    if field.endswith("_level"):
+                        document_profile["writing_style"][field] = "moderate"
+                    elif field.endswith("_ratio"):
+                        document_profile["writing_style"][field] = 0.5
+                    else:
+                        document_profile["writing_style"][field] = "standard"
+            
+            # Add other required sections
+            document_profile["persuasion_style"] = profile.get("persuasion_style", "balanced")
+            document_profile["reasoning_approach"] = profile.get("reasoning_approach", "balanced")
+            document_profile["tone"] = profile.get("tone", {"dominant_sentiment": "neutral", "emotionality": 0.3, "assertiveness": 0.5})
+            
+            # Add content patterns if available
+            if "content_patterns" in profile:
+                document_profile["content_patterns"] = profile["content_patterns"]
+            else:
+                document_profile["content_patterns"] = {
+                    "citation_frequency": 0.2,
+                    "rhetorical_devices": ["analogy", "rhetorical question"],
+                    "structural_preferences": {"intro_length": "medium", "conclusion_strength": "medium"}
+                }
+                
+            logger.info(f"Prepared document generation profile for user_id={self.user_id}")
+            return document_profile
+            
+        except Exception as e:
+            error_msg = f"Error preparing profile for document generation: {e}"
+            logger.error(error_msg)
+            raise ValidationError(error_msg) from e 

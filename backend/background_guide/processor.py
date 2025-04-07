@@ -17,6 +17,7 @@ import numpy as np
 from urllib.parse import urljoin
 import requests
 from pathlib import Path
+from datetime import datetime
 
 # File processing
 import fitz  # PyMuPDF
@@ -128,9 +129,13 @@ class BackgroundGuideProcessor:
             file_path: Path to the file to process
             
         Returns:
-            A dictionary containing the processing results
+            A dictionary containing the processing results in standardized format
         """
         print(f"Processing file: {file_path}")
+        
+        # Store filename and file path for later use
+        self.file_name = os.path.basename(file_path)
+        self.file_path = file_path
         
         # Extract text from file
         if file_path.lower().endswith('.pdf'):
@@ -144,6 +149,7 @@ class BackgroundGuideProcessor:
         
         # Segment the document
         segments = segment_document(cleaned_text, self.segment_tokenizer, self.segment_model)
+        self.segments = segments
         
         # Summarize each segment
         summaries = []
@@ -155,6 +161,7 @@ class BackgroundGuideProcessor:
             )
             segment["summary"] = summary
             summaries.append(summary)
+        self.summaries = summaries
         
         # Generate JSON outputs
         json_files = generate_json_outputs(
@@ -170,13 +177,131 @@ class BackgroundGuideProcessor:
             self.embed_model, 
             os.path.join(self.output_dir, "index")
         )
+        self.index_info = index_info
+        
+        # Return standardized output
+        return self.get_standardized_output()
+    
+    def get_standardized_output(self) -> Dict[str, Any]:
+        """
+        Return processor results in the standard integration format.
+        
+        This method should be called after process_file() to get results
+        in a format that can be directly used by other modules.
+        
+        Returns:
+            A dictionary containing standardized output with metadata, 
+            segments, summaries, and index information.
+        """
+        if not hasattr(self, 'segments') or not hasattr(self, 'summaries'):
+            raise RuntimeError("Must call process_file() before get_standardized_output()")
+            
+        # Extract committee and topic info from segments if available
+        committee = self._extract_committee_info()
+        topic = self._extract_topic_info()
         
         return {
-            "segments": segments,
-            "summaries": summaries,
-            "json_files": json_files,
-            "index_info": index_info
+            "metadata": {
+                "title": getattr(self, 'file_name', 'unknown'),
+                "committee": committee,
+                "topic": topic,
+                "created_at": datetime.now().isoformat()
+            },
+            "segments": self.segments,
+            "summaries": {
+                "executive_summary": self._generate_executive_summary(),
+                "topic_summary": self.summaries[0] if self.summaries else "",
+                "subtopic_summaries": {f"section_{i}": summary for i, summary in enumerate(self.summaries[1:])}
+            },
+            "index_info": getattr(self, 'index_info', {})
         }
+    
+    def _extract_committee_info(self) -> str:
+        """
+        Extract committee information from segments.
+        
+        Returns:
+            Committee name or default value
+        """
+        # Simple extraction logic - look for committee name in first segment
+        if hasattr(self, 'segments') and self.segments:
+            first_segment = self.segments[0]["text"]
+            # Look for patterns like "DISEC", "Security Council", etc.
+            committee_patterns = [
+                r"(?:Committee|Council|Commission)[\s:]+([A-Za-z\s]+)",
+                r"([A-Z]{3,})\s+(?:Committee|Council)"
+            ]
+            for pattern in committee_patterns:
+                match = re.search(pattern, first_segment)
+                if match:
+                    return match.group(1).strip()
+        
+        return "General Assembly" # Default value
+    
+    def _extract_topic_info(self) -> str:
+        """
+        Extract topic information from segments.
+        
+        Returns:
+            Topic or default value
+        """
+        # Simple extraction logic - look for topic indicators in first segments
+        if hasattr(self, 'segments') and self.segments:
+            # Check first two segments for topic indicators
+            text = self.segments[0]["text"]
+            if len(self.segments) > 1:
+                text += " " + self.segments[1]["text"]
+                
+            # Look for patterns like "Topic: X", "Agenda Item: X"
+            topic_patterns = [
+                r"Topic[\s:]+([^\n.]+)",
+                r"Agenda[\s:]+([^\n.]+)",
+                r"Subject[\s:]+([^\n.]+)"
+            ]
+            for pattern in topic_patterns:
+                match = re.search(pattern, text)
+                if match:
+                    return match.group(1).strip()
+        
+        return "General Debate" # Default value
+    
+    def _generate_executive_summary(self) -> str:
+        """
+        Generate an executive summary from all segment summaries.
+        
+        Returns:
+            Executive summary text
+        """
+        if not hasattr(self, 'summaries') or not self.summaries:
+            return ""
+            
+        # Combine all summaries and generate an executive summary
+        combined_summary = " ".join(self.summaries)
+        
+        # If OpenAI is available, use it to create a concise executive summary
+        if self.use_openai_for_summary:
+            import openai
+            
+            # Set OpenAI API key
+            openai.api_key = OPENAI_API_KEY
+            
+            try:
+                response = openai.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": "You are an expert at creating concise executive summaries."},
+                        {"role": "user", "content": f"Create a concise executive summary (150 words max) of this background guide:\n\n{combined_summary}"}
+                    ],
+                    temperature=0.7,
+                    max_tokens=200
+                )
+                return response.choices[0].message.content
+            except Exception as e:
+                print(f"Error generating executive summary with OpenAI: {e}")
+                return combined_summary[:500] + "..."
+        else:
+            # Simple approach: use the first summary as the executive summary
+            return self.summaries[0] if self.summaries else ""
     
     def retrieve_context_for_query(self, query: str, top_k: int = 3) -> List[Dict[str, Any]]:
         """
